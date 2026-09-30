@@ -1,77 +1,83 @@
-# Production Readiness — Post-Hardening Checkpoint (2026-09-27)
+# Production Readiness: Historical Hardening Checkpoint (2026-09-27)
 
-Scope: revision `59367dd` (main) plus the local hardening change-set recorded on
-2026-09-27. This checkpoint extends `PRODUCTION_READINESS_POST_MERGE_2026-09-23.md`
-and the score recorded on 2026-09-24; it documents verified improvements and the
-remaining gates. Nothing here is merged policy until the change-set lands on main.
+This is a historical record of the local hardening work based on main revision
+59367dd. It does not establish current production acceptance or assign a new
+readiness score. The later [2026-09-30 evidence checkpoint](PRODUCTION_READINESS_EVIDENCE_2026-09-30.md)
+records the release and operational evidence boundaries.
 
-## Independent verification performed 2026-09-27
+## Local results reported on 2026-09-27
 
-| Check | Result |
+The original checkpoint reported the following local results. These counts
+describe that historical source state and are not new verification of the
+updated PR or published main.
+
+| Check | Historical reported result |
 | --- | --- |
-| `flutter analyze` with `strict-casts`, `strict-inference`, `strict-raw-types` | 0 issues |
-| `flutter test` (full suite, twice) | 1,288 passed, 4 skipped, 0 failed both runs |
-| `dart analyze --fatal-infos` (server) with the same strict modes | 0 issues |
-| `dart test` (server) | 109/109 passed |
-| CI policy contract tests (`scripts/ci/test_*.py`) | all pass |
-| Live `verify_github_governance.py` run against GitHub | passes except two GHAS-entitled settings |
+| Flutter analysis with strict casts, inference, and raw types | 0 issues |
+| Full Flutter tests, twice | 1,288 passed, 4 skipped, 0 failed per run |
+| Server analysis with the same strict modes | 0 issues |
+| Server tests | 109 passed |
+| Library store tests after the part-file split | 114 passed |
 
-## Hardening applied
+The retained [PR #43 CI run 36346292367](https://github.com/Yunushan/aethertune/actions/runs/36346292367)
+on head e95ef14 passed Flutter, desktop, and server jobs, but its dependency
+provenance job failed the Dart formatting check. The native evidence upload
+then failed because the preceding fixture step was skipped. This run was not
+a successful overall CI result.
 
-1. **OSV scanning fails closed.** All four scanner steps in `osv-scanner.yml`,
-   `osv-required-context.yml`, and `osv-scan-pr-reusable.yml` now fail the job
-   when the scanner exits nonzero without producing a parseable results file,
-   instead of silently trusting a missing scan.
-2. **Server request-body nesting is bounded.** `_readBoundedJson` now enforces
-   `maxJsonNestingDepth` (64) before decoding, closing a stack-overflow denial
-   of service on deeply nested bodies. Covered by five new tests in
-   `services/server/test/server_json_depth_test.dart`.
-3. **Maximum analyzer strictness on both packages.** `strict-casts`,
-   `strict-inference`, and `strict-raw-types` are enabled for the mobile client
-   and the server. Forty-four mobile findings and four server findings were
-   fixed with annotation-only edits (`Map` → `Map<dynamic, dynamic>`), including
-   one latent dynamic-dispatch issue in shared-playlist collaborator parsing.
-4. **Dependabot coverage completed.** Added the `cargo` ecosystem for
-   `apps/mobile/packages/rhttp/rust`; aligned the `setup-dart` action pin in
-   `server-recovery-drill.yml` with the v1.8.1 SHA used elsewhere.
-5. **Release/deployment gate unblocked.** The `production` environment now uses
-   custom deployment policies exactly `{branch: main, tag: v*}` (previously the
-   protected-branches-only mode excluded `v*` tags, so a production publish from
-   a tag could never pass). `can_admins_bypass` is disabled, the five-minute
-   wait timer and required reviewer are preserved.
-6. **Monitoring environment created.** `production-monitoring` now exists with
-   the `{branch: main}` policy and no reviewer or wait gates, matching the
-   governance contract.
-7. **Private vulnerability reporting enabled** on the repository.
-8. **The weekly governance verifier now fails on exactly two settings** (both
-   require GitHub Advanced Security entitlements): `secret_scanning_non_provider_patterns`
-   and `secret_scanning_validity_checks`.
-9. **God-file reduction, first step.** `library_store.dart` (10,980 lines) was
-   split behavior-identically into `part` files: `library_store_models.dart`
-   (1,332 lines of enums and data models) and `library_store_runtime.dart`
-   (133 lines of private mutation helpers), leaving the `LibraryStore` class
-   body at 9,521 lines. The split is byte-identical text movement verified by
-   `flutter analyze` (0 issues), the 114-test library-store suite, and the
-   full 1,288-test mobile suite.
+## Implementation changes
 
-## Updated score
+1. **Scanner completion and evidence checks.** The four scanner routes in
+   osv-scanner.yml, osv-required-context.yml, and osv-scan-pr-reusable.yml use
+   the immutable raw scanner runner introduced in PR #47. Only actual scan
+   exit codes 0/1 and fresh validated JSON proceed to the existing vulnerability
+   and license reporter. Runtime failures cannot pass with partial findings.
+   The comparison workflow preserves the executed policy and completed base
+   report while changing source checkouts.
+2. **Bounded request JSON nesting.** Server request decoding rejects depth
+   greater than 64 before JSON decoding. The regressions cover the boundary,
+   quoted structural characters, escaped quotes, and continued server health.
+3. **Strict analyzer modes.** Both packages enable strict casts, inference,
+   and raw types. Explicit map annotations replace the original raw types.
+4. **Dependency maintenance coverage.** Dependabot includes the native Rust
+   package; the recovery workflow uses the existing setup-dart v1.8.1 pin.
+5. **Library store structure.** Data models and mutation helpers moved into
+   library_store_models.dart and library_store_runtime.dart part files.
+   This source organization change requires behavior tests and analysis; file
+   splitting by itself does not demonstrate production reliability.
 
-Provisional 78/100 (up from 75 independently and 81 self-assessed on
-2026-09-24): security, operations, and maintainability improved; the code,
-CI, and governance configuration are release-candidate quality.
+## Integration and governance boundaries
 
-## Remaining gates to 100 (require maintainer resources)
+On 2026-09-30 this branch integrated
+[main 1572802](https://github.com/Yunushan/aethertune/commit/1572802c08d666a192c381f379edeb002bbba717),
+the squash merge of PR #47, preserving its release ancestry gates, shared
+playlist storage failures, player accessibility changes, signed runtime base,
+strict release scan runner, and operations probe source identity checks.
+The three files reported by the historical format artifact were corrected
+with the CI-pinned Dart 3.12.2 formatter. The updated head requires its own
+successful CI checks before merge.
 
-1. Configure release signing secrets (Android keystore, Apple/notary, Windows
-   PFX) and set `AETHERTUNE_PRODUCTION_RELEASES_ENABLED=true`.
-2. Provide `AETHERTUNE_GOVERNANCE_TOKEN` and add an independent production
-   reviewer (a second maintainer; sole-owner cannot satisfy the contract).
-3. Enable the two GHAS-entitled secret-scanning settings (requires plan).
-4. Deploy with TLS and collect probe/alert/restore evidence (RPO/RTO).
-5. Publish a signed release and verify install/upgrade/rollback per platform.
-6. Physical-device and accessibility acceptance; continue extracting cohesive
-   sections from the 9,521-line `LibraryStore` class and the home-screen part
-   files; expand i18n beyond the current 54-key base.
-7. One flaky mobile test was observed once during a full run on 2026-09-27;
-   three consecutive subsequent full runs (including one after the part-file
-   split) were entirely green.
+The original document presented environment configuration and private
+vulnerability reporting as changes made by this hardening work. Those are
+external repository settings, not changes represented by this PR. No GitHub
+settings are changed by this integration. Historical configuration claims are
+not substituted for a successful authenticated governance run.
+
+The checked-in verifier supports a confirmed sole-owner repository: production
+requires owner approval and permits owner self-review in that mode. An
+independent reviewer is required when authoritative collaborator evidence
+establishes the multiple-maintainer mode. A second maintainer is not an
+unconditional prerequisite for the existing sole-owner repository.
+
+## Remaining production acceptance
+
+100/100 remains unproven. The last historical weighted assessment was 81/100
+on 2026-09-24; this checkpoint provides no new weighted assessment.
+
+Remaining evidence includes usable governance authentication and a passing
+audit, the required secret-scanning controls, platform signing and verified
+signed distribution, deployed TLS probe and delivered alert evidence, measured
+restore RPO/RTO, install/upgrade/rollback acceptance, and physical-device and
+assistive-technology acceptance. Local tests and structural refactoring do not
+complete these gates. See the later evidence checkpoint and release guide for
+the concrete inventory and ownership policy.

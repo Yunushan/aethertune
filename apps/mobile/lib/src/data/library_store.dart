@@ -9518,4 +9518,3 @@ class LibraryStore extends ChangeNotifier {
     return true;
   }
 }
-

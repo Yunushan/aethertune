@@ -842,7 +842,8 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     }
     final subscriptionIds = <String>{};
     final subscriptionRemoteIds = <String>{};
-    for (final value in publicSubscriptions.whereType<Map<dynamic, dynamic>>()) {
+    for (final value
+        in publicSubscriptions.whereType<Map<dynamic, dynamic>>()) {
       final subscription = PublicSmartPlaylistSubscription.tryFromJson(
         Map<String, Object?>.from(value),
       );

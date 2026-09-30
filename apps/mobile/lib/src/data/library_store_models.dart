@@ -1329,4 +1329,3 @@ AppLanguagePreference _appLanguagePreferenceFromName(String? value) {
     orElse: () => AppLanguagePreference.system,
   );
 }
-

@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -145,18 +148,22 @@ class OsvScannerProcessTest(unittest.TestCase):
             "from pathlib import Path\n"
             "workspace = Path(sys.argv[1])\n"
             "status, payload = int(sys.argv[2]), sys.argv[3]\n"
-            "if (workspace / 'results.json').exists() or (workspace / 'results.sarif').exists():\n"
+            "output = [arg.split('=', 1)[1] for arg in sys.argv[4:] if arg.startswith('--output=')][-1]\n"
+            "if (workspace / output).exists() or (workspace / 'results.sarif').exists():\n"
             "    raise SystemExit(254)\n"
             "(workspace / 'invocation.json').write_text(json.dumps(sys.argv[4:]), encoding='utf-8')\n"
             "if payload != 'MISSING':\n"
-            "    (workspace / 'results.json').write_text(payload, encoding='utf-8')\n"
+            "    (workspace / output).write_text(payload, encoding='utf-8')\n"
             "raise SystemExit(status)\n",
             encoding="utf-8",
         )
 
-    def run_scanner(self, exit_code: int, payload: str, args: str = "--lockfile=pubspec.lock") -> None:
+    def run_scanner(
+        self, exit_code: int, payload: str, args: str = "--lockfile=pubspec.lock",
+        *, output_name: str = "results.json",
+    ) -> None:
         run_osv_scan(
-            self.workspace, args,
+            self.workspace, args, output_name=output_name,
             docker_command=(sys.executable, "-B", str(self.fake_docker),
                             str(self.workspace), str(exit_code), payload),
         )
@@ -164,7 +171,7 @@ class OsvScannerProcessTest(unittest.TestCase):
     def test_actual_subprocess_status_distinguishes_findings_from_partial_crashes(self) -> None:
         payload = json.dumps(result(vulnerable_package()))
         self.run_scanner(1, payload)
-        for exit_code in (125, 127, 128, 129, 130, 137):
+        for exit_code in (2, 125, 127, 128, 129, 130, 137):
             with self.subTest(exit_code=exit_code):
                 with self.assertRaisesRegex(ValueError, f"exit code {exit_code}"):
                     self.run_scanner(exit_code, payload)
@@ -182,6 +189,31 @@ class OsvScannerProcessTest(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ValueError):
                     self.run_scanner(0, payload)
+
+    def test_base_and_head_scans_require_their_own_fresh_output(self) -> None:
+        payload = json.dumps(result(vulnerable_package()))
+        for output in ("old-results.json", "new-results.json"):
+            with self.subTest(output=output):
+                other = "new-results.json" if output == "old-results.json" else "old-results.json"
+                (self.workspace / other).write_text("previous completed scan", encoding="utf-8")
+                (self.workspace / output).write_text("checkout-seeded scan", encoding="utf-8")
+                self.run_scanner(1, payload, output_name=output)
+                self.assertEqual(json.loads((self.workspace / output).read_text()), json.loads(payload))
+                self.assertEqual((self.workspace / other).read_text(), "previous completed scan")
+                with self.assertRaisesRegex(ValueError, "cannot read scanner results"):
+                    self.run_scanner(0, "MISSING", output_name=output)
+                self.assertFalse((self.workspace / output).exists())
+                self.assertEqual((self.workspace / other).read_text(), "previous completed scan")
+
+    def test_output_name_cannot_escape_or_replace_another_workspace_file(self) -> None:
+        results = self.workspace / "results.json"
+        results.write_text("existing evidence", encoding="utf-8")
+        for output in ("../results.json", "/tmp/results.json", "pubspec.lock", "other.json"):
+            with self.subTest(output=output):
+                with self.assertRaisesRegex(ValueError, "fixed evidence filenames"):
+                    self.run_scanner(0, '{"results": []}', output_name=output)
+                self.assertEqual(results.read_text(), "existing evidence")
+                self.assertFalse((self.workspace / "invocation.json").exists())
 
     def test_empty_or_unclosed_arguments_do_not_start_a_process(self) -> None:
         for arguments in ("", '"unclosed'):
@@ -222,6 +254,74 @@ class OsvWorkflowContractTest(unittest.TestCase):
         self.assertNotIn("if:", reporter)
         self.assertIn("--new=results.json", reporter)
         self.assertIn("--fail-on-vuln=${{ inputs.fail-on-vuln }}", reporter)
+
+    def test_all_scanner_routes_use_the_raw_status_and_fresh_evidence_gate(self) -> None:
+        workflows = ("osv-scanner.yml", "osv-required-context.yml", "osv-scan-pr-reusable.yml")
+        for name in workflows:
+            with self.subTest(workflow=name):
+                workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+                self.assertIn("run_osv_scan.py", workflow)
+                self.assertNotIn("continue-on-error:", workflow)
+                self.assertNotIn("osv-scanner-action/osv-scanner-action@", workflow)
+                self.assertIn("osv-scanner-action/osv-reporter-action@", workflow)
+                self.assertIn("--fail-on-vuln=", workflow)
+        comparison = (ROOT / ".github/workflows/osv-scan-pr-reusable.yml").read_text(encoding="utf-8")
+        self.assertIn("OSV_SCAN_OUTPUT: old-results.json", comparison)
+        self.assertIn("OSV_SCAN_OUTPUT: new-results.json", comparison)
+        self.assertIn("--old=old-results.json", comparison)
+        self.assertIn("--new=new-results.json", comparison)
+        self.assertLess(comparison.index("Preserve scanner policy across checkouts"),
+                        comparison.index("Checkout target branch"))
+
+    def test_checkout_cannot_replace_scanner_policy_or_completed_base_evidence(self) -> None:
+        workflow = (ROOT / ".github/workflows/osv-scan-pr-reusable.yml").read_text(encoding="utf-8")
+
+        def commands(name):
+            step = workflow.split("      - name: " + name + "\n", 1)[1].split("      - name:", 1)[0]
+            return textwrap.dedent(step.split("        run: |\n", 1)[1]).strip()
+
+        bash = shutil.which("bash")
+        git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+        if os.name == "nt" and git_bash.is_file():
+            bash = str(git_bash)
+        if not bash:
+            self.skipTest("bash is required for workflow policy retention")
+        with tempfile.TemporaryDirectory(prefix="OSV checkout fixture ") as directory:
+            fixture = Path(directory)
+            workspace = fixture / "checkout"
+            policy_source = workspace / "scripts/ci"
+            policy_source.mkdir(parents=True)
+            expected = {}
+            for name in ("run_osv_scan.py", "verify_osv_scan.py"):
+                expected[name] = (ROOT / "scripts/ci" / name).read_bytes()
+                (policy_source / name).write_bytes(expected[name])
+            environment_file = fixture / "environment"
+            environment = {**os.environ, "RUNNER_TEMP": fixture.as_posix(),
+                           "GITHUB_ENV": environment_file.as_posix()}
+
+            def execute(script):
+                subprocess.run([bash, "--noprofile", "--norc", "-c", script],
+                               cwd=workspace, env=environment, check=True, capture_output=True, text=True)
+
+            execute(commands("Preserve scanner policy across checkouts"))
+            key, value = environment_file.read_text().strip().split("=", 1)
+            self.assertEqual(key, "AETHERTUNE_OSV_POLICY_DIR")
+            environment[key] = value
+            policy = Path(value)
+            base_evidence = b"actual completed base scan"
+            (workspace / "old-results.json").write_bytes(base_evidence)
+            old_commands = commands("Run scanner on existing code and verify evidence")
+            execute(next(line for line in old_commands.splitlines() if line.startswith("mv ")))
+            # Model a checkout whose source removes the helper and seeds fake scan JSON.
+            shutil.rmtree(policy_source)
+            (workspace / "old-results.json").write_text("checkout-seeded fake scan", encoding="utf-8")
+            new_commands = commands("Run scanner on new code and verify evidence")
+            execute(new_commands.split("python3", 1)[0])
+            self.assertEqual((workspace / "old-results.json").read_bytes(), base_evidence)
+            for name, content in expected.items():
+                self.assertEqual((policy / name).read_bytes(), content)
+            self.assertIn('python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"', old_commands)
+            self.assertIn('python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"', new_commands)
 
     def test_release_requires_the_guarded_workflow_and_failing_policy(self) -> None:
         workflow = (ROOT / ".github/workflows/aethertune-release.yml").read_text(encoding="utf-8")

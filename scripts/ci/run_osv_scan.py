@@ -26,23 +26,26 @@ def run_osv_scan(
     scan_args: str,
     *,
     docker_command: Sequence[str] = ("docker",),
+    output_name: str = "results.json",
 ) -> None:
+    if output_name not in {"results.json", "old-results.json", "new-results.json"}:
+        raise ValueError("scanner output must be one of the fixed evidence filenames")
     arguments = shlex.split(scan_args)
     if not arguments:
         raise ValueError("scan arguments must not be empty")
     workspace = workspace.resolve(strict=True)
     if not workspace.is_dir():
         raise ValueError("scanner workspace must be a directory")
-    # Remove only the two known output files before launching the scanner.
+    # Remove only this scan's known output and the reporter file before launching.
     # Checkout-seeded or previous results cannot stand in for current evidence.
-    results = workspace / "results.json"
+    results = workspace / output_name
     results.unlink(missing_ok=True)
     (workspace / "results.sarif").unlink(missing_ok=True)
     command = [
         *docker_command, "run", "--rm", "--platform", "linux/amd64",
         "--env", "GOTOOLCHAIN=auto", "--volume", f"{workspace}:/github/workspace",
         "--workdir", "/github/workspace", "--entrypoint", "/root/osv-scanner",
-        OSV_SCANNER_IMAGE, *arguments, "--output=results.json", "--format=json",
+        OSV_SCANNER_IMAGE, *arguments, f"--output={output_name}", "--format=json",
     ]
     completed = subprocess.run(command, check=False)
     # Reject Docker/runtime/API/configuration/no-package errors regardless of
@@ -55,6 +58,7 @@ def main() -> int:
         run_osv_scan(
             Path(os.environ.get("GITHUB_WORKSPACE", os.getcwd())),
             os.environ.get("OSV_SCAN_ARGS", ""),
+            output_name=os.environ.get("OSV_SCAN_OUTPUT", "results.json"),
         )
     except (ValueError, OSError) as error:
         print(f"::error::OSV scan gate failed: {error}", file=sys.stderr)

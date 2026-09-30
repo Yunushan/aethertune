@@ -133,10 +133,8 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("actions: read", workflow)
         self.assertIn("contents: read", workflow)
         self.assertIn("security-events: write", workflow)
-        self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
-            workflow,
-        )
+        self.assertIn("python3 scripts/ci/run_osv_scan.py", workflow)
+        self.assertNotIn("continue-on-error:", workflow)
         self.assertIn(
             "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,
@@ -175,10 +173,8 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("pull_request:", workflow)
         self.assertIn("merge_group:", workflow)
         self.assertIn("branches: [main]", workflow)
-        self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
-            reusable_workflow,
-        )
+        self.assertIn('python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"', reusable_workflow)
+        self.assertNotIn("continue-on-error:", reusable_workflow)
         self.assertIn(
             "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             reusable_workflow,
@@ -201,10 +197,8 @@ class DependencyLockPolicyTest(unittest.TestCase):
             "name: New OSV vulnerabilities and license violations / osv-scan",
             workflow,
         )
-        self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
-            workflow,
-        )
+        self.assertIn("python3 scripts/ci/run_osv_scan.py", workflow)
+        self.assertNotIn("continue-on-error:", workflow)
         self.assertIn(
             "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
             workflow,

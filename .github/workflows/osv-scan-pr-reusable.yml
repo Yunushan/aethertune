@@ -27,6 +27,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Preserve scanner policy across checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          policy_dir="$(mktemp -d "$RUNNER_TEMP/aethertune-osv-policy.XXXXXX")"
+          cp scripts/ci/run_osv_scan.py scripts/ci/verify_osv_scan.py "$policy_dir/"
+          printf 'AETHERTUNE_OSV_POLICY_DIR=%s\n' "$policy_dir" >> "$GITHUB_ENV"
+
       - name: Checkout target branch
         shell: bash
         run: |
@@ -42,26 +50,15 @@ jobs:
           git checkout "$base_ref"
           git submodule update --recursive
 
-      - name: Run scanner on existing code
-        id: osv_scan_old
-        uses: google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --format=json
-            --output=old-results.json
-            ${{ inputs.scan-args }}
-
-      - name: Fail closed when base scanner crashes
-        if: ${{ !cancelled() && steps.osv_scan_old.outcome == 'failure' }}
+      - name: Run scanner on existing code and verify evidence
         shell: bash
+        env:
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+          OSV_SCAN_OUTPUT: old-results.json
         run: |
           set -euo pipefail
-          if [[ ! -s old-results.json ]] || ! python3 -c 'import json,sys; data=json.load(open("old-results.json", encoding="utf-8")); sys.exit(0 if isinstance(data, dict) and isinstance(data.get("results"), list) else 1)'; then
-            echo "::error::OSV scanner exited nonzero without producing a parseable base results file. Failing closed instead of trusting a missing scan."
-            exit 1
-          fi
-          echo "Scanner exited nonzero but produced a parseable base results file; the reporter enforces the vulnerability and license policy."
+          python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"
+          mv old-results.json "$AETHERTUNE_OSV_POLICY_DIR/old-results.json"
 
       - name: Checkout current branch
         shell: bash
@@ -70,29 +67,18 @@ jobs:
           git checkout -f "$GITHUB_SHA"
           git submodule update --recursive
 
-      - name: Run scanner on new code
-        id: osv_scan_new
-        uses: google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --format=json
-            --output=new-results.json
-            ${{ inputs.scan-args }}
-
-      - name: Fail closed when head scanner crashes
-        if: ${{ !cancelled() && steps.osv_scan_new.outcome == 'failure' }}
+      - name: Run scanner on new code and verify evidence
         shell: bash
+        env:
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+          OSV_SCAN_OUTPUT: new-results.json
         run: |
           set -euo pipefail
-          if [[ ! -s new-results.json ]] || ! python3 -c 'import json,sys; data=json.load(open("new-results.json", encoding="utf-8")); sys.exit(0 if isinstance(data, dict) and isinstance(data.get("results"), list) else 1)'; then
-            echo "::error::OSV scanner exited nonzero without producing a parseable head results file. Failing closed instead of trusting a missing scan."
-            exit 1
-          fi
-          echo "Scanner exited nonzero but produced a parseable head results file; the reporter enforces the vulnerability and license policy."
+          cp "$AETHERTUNE_OSV_POLICY_DIR/old-results.json" old-results.json
+          python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"
 
       - name: Run osv-scanner-reporter
-        uses: google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
+        uses: google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.5.1
         with:
           scan-args: |-
             --output=results.sarif
