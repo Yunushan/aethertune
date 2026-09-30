@@ -16,6 +16,9 @@ import subprocess
 import sys
 import time
 import uuid
+from urllib.parse import urlencode, urlsplit
+import urllib.error
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "apps/mobile"
@@ -23,6 +26,8 @@ BUNDLE = "dev.aethertune.aethertune"
 PREFIX = "AetherTune_Acceptance_"
 TARGET = "integration_test/ios_native_acceptance_test.dart"
 IOS_ACCEPTANCE_BUILD_TIMEOUT_SECONDS = 1500
+VM_SERVICE_DISCOVERY_TIMEOUT_SECONDS = 60
+VM_SERVICE_LOG_MAX_BYTES = 1024 * 1024
 MARKER = "aethertune-ios-native-acceptance-v1\n"
 PHASES = ("seed", "reopen", "sync")
 COMMON = {"production-app-startup", "native-background-cancellation"}
@@ -34,6 +39,7 @@ CHECKS = {
     "reopen": COMMON | {
         "keychain-survived-process-restart", "native-library-snapshot",
         "library-queue-settings-survived-process-restart", "native-keychain-deletion",
+        "onboarding-offline-preferences-survived-process-restart",
     },
     "sync": COMMON | {
         "platform-trusted-TLS-UTF8-upload-status-auth-redirect", "untrusted-root",
@@ -114,7 +120,8 @@ def support_directory(container: Path, guest: dict) -> Path:
     return contained(container / "Library/Application Support", container)
 
 
-def verify_report(report: dict, phase: str, device: str, source: str, previous_pids: set[int]) -> int:
+def verify_report(report: dict, phase: str, device: str, source: str, previous_pids: set[int],
+                  *, launch_pid: int) -> int:
     if (report.get("status") != "passed" or report.get("phase") != phase
             or report.get("device") != device or report.get("sourceCommit") != source):
         raise ValueError(f"Missing, failed or mismatched {phase} runtime report.")
@@ -125,6 +132,8 @@ def verify_report(report: dict, phase: str, device: str, source: str, previous_p
     pid = report.get("pid")
     if type(pid) is not int or pid <= 0 or pid in previous_pids:
         raise ValueError("Each phase must execute in a distinct app process.")
+    if pid != launch_pid:
+        raise ValueError("Runtime report PID does not match the owned simulator launch.")
     return pid
 
 
@@ -233,6 +242,7 @@ class Simulator:
         self.run = run
         self.name = name
         self.device: str | None = None
+        self.expected_support: Path | None = None
 
     def inventory(self) -> dict:
         return json.loads(self.run(["xcrun", "simctl", "list", "--json"]))
@@ -262,7 +272,10 @@ class Simulator:
 
     def support(self) -> Path:
         container = self.command("get_app_container", BUNDLE, "data")
-        return support_directory(Path(container), self.current())
+        support = support_directory(Path(container), self.current())
+        if self.expected_support is not None and support != self.expected_support:
+            raise ValueError("Application Data container changed during process restart.")
+        return support
 
     def cleanup(self) -> dict:
         if self.device is None:
@@ -349,30 +362,233 @@ def _silent_drive_timeout(error: CommandTimedOut) -> bool:
 
 
 def _sync_launch_recovery_reason(error: CommandTimedOut) -> str | None:
-    if not error.reaped or not error.group_gone:
+    if (not error.reaped or not error.group_gone
+            or error.command[:2] != ["flutter", "drive"]):
         return None
     if _silent_drive_timeout(error):
         return "silent-flutter-drive-timeout"
-    try:
-        if error.stdout_path.stat().st_size != 0:
-            return None
-        stderr = error.stderr_path.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        return None
-    if stderr == ("Error waiting for a debug connection: "
-                  "The log reader failed unexpectedly\n"
-                  "Application failed to start on attempt: 1"):
-        return "simulator-log-reader-failure"
     return None
 
 
-def drive_phase(sim: Simulator, run: Commands, bundle: Path, phase: str) -> str | None:
-    command = ["flutter", "drive", "--no-pub", "-d", sim.device,
-               "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
-               "--use-application-binary", str(bundle), "--keep-app-running"]
-    try:
-        run(command, cwd=APP, timeout=360)
+class _NoVMRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, _request, _fp, _code, _msg, _headers, _newurl):
         return None
+
+
+def vm_is_paused_at_start(uri: str, pid: int) -> bool:
+    """Permit a silent attach retry only if this exact VM has not run its main isolate."""
+    authenticated_vm_uri(uri)
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoVMRedirect())
+
+    def result(method: str, parameters: dict[str, str] | None = None) -> dict:
+        suffix = method + ("?" + urlencode(parameters) if parameters else "")
+        with opener.open(uri + suffix, timeout=5) as response:
+            raw = response.read(65537)
+        if len(raw) > 65536:
+            raise ValueError("VM service readiness response exceeds its size bound.")
+        value = json.loads(raw)
+        if not isinstance(value, dict) or not isinstance(value.get("result"), dict):
+            raise ValueError("Malformed VM service readiness response.")
+        return value["result"]
+
+    try:
+        vm = result("getVM")
+        if vm.get("type") != "VM" or type(vm.get("pid")) is not int or vm["pid"] != pid:
+            return False
+        isolates = vm.get("isolates")
+        if not isinstance(isolates, list):
+            return False
+        main = [item for item in isolates if isinstance(item, dict)
+                and item.get("isSystemIsolate") is False]
+        if len(main) != 1 or not isinstance(main[0].get("id"), str):
+            return False
+        isolate = result("getIsolate", {"isolateId": main[0]["id"]})
+        return (isolate.get("type") == "Isolate" and isolate.get("id") == main[0]["id"]
+                and isinstance(isolate.get("pauseEvent"), dict)
+                and isolate["pauseEvent"].get("kind") == "PauseStart")
+    except (OSError, ValueError, urllib.error.URLError):
+        return False
+
+
+def launch_pid(output: str) -> int:
+    match = re.fullmatch(re.escape(BUNDLE) + r": ([1-9][0-9]*)", output.strip())
+    if match is None:
+        raise ValueError("Missing or malformed owned app launch PID.")
+    return int(match[1])
+
+
+def authenticated_vm_uri(value: str) -> str:
+    # Retain the engine's authentication token; never attach to a remote service
+    # or an unauthenticated port, and never disable service authentication.
+    uri = urlsplit(value)
+    if (uri.scheme != "http" or uri.hostname != "127.0.0.1"
+            or uri.username is not None or uri.password is not None
+            or uri.query or uri.fragment or uri.port is None
+            or not 1 <= uri.port <= 65535
+            or re.fullmatch(r"/[A-Za-z0-9_-]{1,256}={0,2}/", uri.path) is None
+            or value != f"http://127.0.0.1:{uri.port}{uri.path}"):
+        raise ValueError("Expected an authenticated loopback Dart VM service URI.")
+    return value
+
+
+def vm_uri_from_log(contents: str, pid: int) -> str | None:
+    # `log stream --style json` is an array of multiline records and can be
+    # incomplete while the process writes. Decode complete records only. Ignore
+    # other processes even when they print a service URI into the same log.
+    decoder = json.JSONDecoder()
+    position = 0
+    uris: set[str] = set()
+    while (position := contents.find("{", position)) != -1:
+        try:
+            record, length = decoder.raw_decode(contents[position:])
+        except json.JSONDecodeError:
+            break
+        position += length
+        if (not isinstance(record, dict) or type(record.get("processID")) is not int
+                or record["processID"] != pid):
+            continue
+        message = record.get("eventMessage")
+        if not isinstance(message, str):
+            continue
+        match = re.search(r"The Dart VM service is listening on (\S+)", message)
+        if match is not None:
+            uris.add(authenticated_vm_uri(match[1]))
+    if len(uris) > 1:
+        raise ValueError("Multiple VM service URIs for the owned launch PID.")
+    return next(iter(uris), None)
+
+
+class VMServiceLog:
+    """Bounded, reaped log reader for this owned simulator and app executable."""
+
+    def __init__(self, sim: Simulator, run: Commands, phase: str, attempt: int,
+                 executable_name: str):
+        if re.fullmatch(r"[A-Za-z0-9_.-]+", executable_name) is None:
+            raise ValueError("Unexpected compiled executable name.")
+        if phase not in PHASES or type(attempt) is not int or attempt not in (1, 2):
+            raise ValueError("Unexpected VM service discovery phase or attempt.")
+        self.sim = sim
+        self.run = run
+        self.stdout_path = run.evidence / f"{phase}-launch-{attempt}-vm-service.log"
+        self.stderr_path = run.evidence / f"{phase}-launch-{attempt}-vm-service-stderr.log"
+        self.command = ["xcrun", "simctl", "spawn", sim.device, "log", "stream",
+                        "--style", "json", "--predicate",
+                        f'eventType = logEvent AND processImagePath ENDSWITH "/{executable_name}"']
+
+    def __enter__(self):
+        self.sim.current()
+        self.stdout = self.stdout_path.open("wb")
+        try:
+            self.stderr = self.stderr_path.open("wb")
+        except BaseException:
+            self.stdout.close()
+            raise
+        try:
+            self.child = subprocess.Popen(self.command, cwd=APP, stdin=subprocess.DEVNULL,
+                                          stdout=self.stdout, stderr=self.stderr,
+                                          start_new_session=True)
+        except BaseException:
+            self.stdout.close()
+            self.stderr.close()
+            raise
+        return self
+
+    def uri(self, pid: int) -> str:
+        deadline = time.monotonic() + VM_SERVICE_DISCOVERY_TIMEOUT_SECONDS
+        last_fallback = float("-inf")
+        while time.monotonic() < deadline:
+            if self.child.poll() is not None:
+                raise RuntimeError("Owned simulator VM service log reader exited early.")
+            with self.stdout_path.open("rb") as stream:
+                contents = stream.read(VM_SERVICE_LOG_MAX_BYTES + 1)
+            if len(contents) > VM_SERVICE_LOG_MAX_BYTES:
+                raise ValueError("Owned VM service discovery log exceeds its size bound.")
+            uri = vm_uri_from_log(contents.decode("utf-8", errors="replace"), pid)
+            if uri is not None:
+                return uri
+            # Popen is not proof that the stream subscription is active. Recover
+            # an early announcement from this exact owned launch's retained log;
+            # never guess a port or turn off its authentication token.
+            if time.monotonic() - last_fallback >= 1:
+                snapshot = self.sim.command(
+                    "spawn", "log", "show", "--last", "1m", "--style", "json",
+                    "--predicate", self.command[-1]
+                    + ' AND eventMessage CONTAINS "The Dart VM service is listening on "',
+                    timeout=10)
+                if len(snapshot.encode("utf-8")) > VM_SERVICE_LOG_MAX_BYTES:
+                    raise ValueError("Owned VM service snapshot exceeds its size bound.")
+                uri = vm_uri_from_log(snapshot, pid)
+                if uri is not None:
+                    return uri
+                last_fallback = time.monotonic()
+            # Poll only service readiness, before any test assertion is resumed.
+            time.sleep(0.1)
+        raise TimeoutError("Missing authenticated VM service URI for the owned launch PID.")
+
+    def __exit__(self, _type, _value, _traceback):
+        try:
+            # Only this start_new_session reader's process group is signalled.
+            # Reaping the leader alone does not prove its log child is stopped.
+            for sig in (signal.SIGTERM, signal.SIGKILL):
+                try:
+                    os.killpg(self.child.pid, sig)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    if sig == signal.SIGTERM:
+                        self.child.terminate()
+                    else:
+                        self.child.kill()
+                try:
+                    self.child.wait(timeout=10)
+                    try:
+                        os.killpg(self.child.pid, 0)
+                    except ProcessLookupError:
+                        break
+                except subprocess.TimeoutExpired:
+                    if sig == signal.SIGKILL:
+                        raise RuntimeError("Owned VM service log reader was not reaped.")
+            else:
+                raise RuntimeError("Owned VM service log reader process group remains present.")
+        except Exception as cleanup_error:
+            if _value is None:
+                raise
+            # Keep the launch/discovery/assertion error as the primary failure.
+            print(f"VM service reader cleanup warning: {cleanup_error}", flush=True)
+            self.stderr.write(f"\nCleanup warning: {cleanup_error}\n".encode("utf-8"))
+        finally:
+            self.stdout.close()
+            self.stderr.close()
+
+
+def _drive_once(sim: Simulator, run: Commands, phase: str, attempt: int,
+                executable_name: str, previous_pids: set[int]) -> int:
+    sim.support()  # Recheck the installation's Data container before launch.
+    # Flutter 3.44.6 uses syslog for engine output. Start unified logging before
+    # launching so the authenticated service announcement cannot be missed.
+    with VMServiceLog(sim, run, phase, attempt, executable_name) as logs:
+        pid = launch_pid(sim.command(
+            "launch", BUNDLE, "--start-paused", "--disable-vm-service-publication",
+            "--enable-checked-mode", "--verify-entry-points"))
+        if pid in previous_pids:
+            raise ValueError("Owned app launch reused a previous phase PID.")
+        sim.support()
+        uri = logs.uri(pid)
+    write_json(run.evidence / f"{phase}-launch-{attempt}.json", {
+        "phase": phase, "attempt": attempt, "device": sim.device,
+        "pid": pid, "dataContainer": str(sim.expected_support.parent.parent),
+    })
+    run(["flutter", "drive", "--no-pub", "-d", sim.device,
+         "--target", TARGET, "--driver", "test_driver/native_acceptance_driver.dart",
+         f"--use-existing-app={uri}", "--keep-app-running"], cwd=APP, timeout=360)
+    sim.support()
+    return pid
+
+
+def drive_phase(sim: Simulator, run: Commands, phase: str,
+                executable_name: str, previous_pids: set[int]) -> tuple[str | None, int]:
+    try:
+        return None, _drive_once(sim, run, phase, 1, executable_name, previous_pids)
     except CommandTimedOut as error:
         _record_drive_timeout(error, phase, 1)
         reason = _sync_launch_recovery_reason(error)
@@ -382,11 +598,16 @@ def drive_phase(sim: Simulator, run: Commands, bundle: Path, phase: str) -> str 
         report = contained(support / f"ios-acceptance-{phase}.json", support)
         if report.exists():
             raise
+        launched = json.loads((run.evidence / f"{phase}-launch-1.json").read_text())
+        uri_options = [item.split("=", 1)[1] for item in error.command
+                       if item.startswith("--use-existing-app=")]
+        if (len(uri_options) != 1
+                or not vm_is_paused_at_start(uri_options[0], launched["pid"])):
+            raise
+        previous_pids = previous_pids | {launched["pid"]}
 
-    # A stalled launch or failed Simulator log reader can leave Flutter waiting
-    # for the VM service. Retry only this unreported sync phase once.
-    # Restart only the simulator whose UUID and ownership name are rechecked by
-    # Simulator.command; shutdown and boot retain the app container and keychain.
+    # Retain the existing bounded recovery for an unreported sync driver
+    # timeout. A reported assertion or persistence failure is never retried.
     print("Sync launch failed before a runtime report; restarting owned simulator once.",
           flush=True)
     if sim.current()["state"] != "Shutdown":
@@ -394,11 +615,11 @@ def drive_phase(sim: Simulator, run: Commands, bundle: Path, phase: str) -> str 
     sim.command("boot")
     sim.command("bootstatus", "-b", timeout=300)
     try:
-        run(command, cwd=APP, timeout=360)
+        pid = _drive_once(sim, run, phase, 2, executable_name, previous_pids)
     except CommandTimedOut as error:
         _record_drive_timeout(error, phase, 2)
         raise
-    return reason
+    return reason, pid
 
 
 def execute(evidence: Path, run: Commands, source: str) -> dict:
@@ -438,6 +659,8 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
         executable = contained(bundle / info["CFBundleExecutable"], bundle)
         result["executableSha256"] = hashlib.sha256(executable.read_bytes()).hexdigest()
         sim.command("install", str(bundle))
+        sim.expected_support = sim.support()
+        result["dataContainer"] = str(sim.expected_support.parent.parent)
         fixture = contained(sim.support() / "aethertune-ios-fixture", sim.support())
         fixture.mkdir(parents=True, mode=0o700)
         (fixture / "marker").write_text(MARKER, encoding="utf-8")
@@ -452,7 +675,7 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
                 "sourceCommit": source,
             })
             try:
-                recovery_reason = drive_phase(sim, run, bundle, phase)
+                recovery_reason, pid = drive_phase(sim, run, phase, executable.name, pids)
                 if recovery_reason is not None:
                     result["recoveries"].append({
                         "phase": phase, "reason": recovery_reason,
@@ -465,7 +688,7 @@ def execute(evidence: Path, run: Commands, source: str) -> dict:
                     result["errors"].append(f"Failed-phase evidence: {error}")
                 raise
             report = collect(sim, evidence, phase)
-            pids.add(verify_report(report, phase, sim.device, source, pids))
+            pids.add(verify_report(report, phase, sim.device, source, pids, launch_pid=pid))
             result["phases"].append(phase)
             sim.command("terminate", BUNDLE)
     except (Exception, KeyboardInterrupt) as error:

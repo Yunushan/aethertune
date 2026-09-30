@@ -21,17 +21,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run scanner
-        uses: google/osv-scanner-action/osv-scanner-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.6.0
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --output=results.json
-            --format=json
+      - name: Run scanner and verify evidence
+        shell: bash
+        env:
+          OSV_SCAN_ARGS: |-
             -r
             ./
             --allow-no-lockfiles
             --licenses=0BSD,Apache-2.0,BSD-2-Clause,BSD-3-Clause,CC0-1.0,CDLA-Permissive-2.0,ISC,LGPL-2.1-only,LGPL-3.0-only,MIT,MPL-2.0,Unicode-3.0,Unicode-DFS-2016,Unlicense,Zlib,UNKNOWN
+        run: python3 scripts/ci/run_osv_scan.py
 
       - name: Enforce vulnerability and license policy
         uses: google/osv-scanner-action/osv-reporter-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.6.0

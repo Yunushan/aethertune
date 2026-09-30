@@ -27,6 +27,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Preserve scanner policy across checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          policy_dir="$(mktemp -d "$RUNNER_TEMP/aethertune-osv-policy.XXXXXX")"
+          cp scripts/ci/run_osv_scan.py scripts/ci/verify_osv_scan.py "$policy_dir/"
+          printf 'AETHERTUNE_OSV_POLICY_DIR=%s\n' "$policy_dir" >> "$GITHUB_ENV"
+
       - name: Checkout target branch
         shell: bash
         run: |
@@ -42,14 +50,15 @@ jobs:
           git checkout "$base_ref"
           git submodule update --recursive
 
-      - name: Run scanner on existing code
-        uses: google/osv-scanner-action/osv-scanner-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.6.0
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --format=json
-            --output=old-results.json
-            ${{ inputs.scan-args }}
+      - name: Run scanner on existing code and verify evidence
+        shell: bash
+        env:
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+          OSV_SCAN_OUTPUT: old-results.json
+        run: |
+          set -euo pipefail
+          python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"
+          mv old-results.json "$AETHERTUNE_OSV_POLICY_DIR/old-results.json"
 
       - name: Checkout current branch
         shell: bash
@@ -58,14 +67,17 @@ jobs:
           git checkout -f "$GITHUB_SHA"
           git submodule update --recursive
 
-      - name: Run scanner on new code
-        uses: google/osv-scanner-action/osv-scanner-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.6.0
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --format=json
-            --output=new-results.json
-            ${{ inputs.scan-args }}
+      - name: Run scanner on new code and verify evidence
+        shell: bash
+        env:
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+          OSV_SCAN_OUTPUT: new-results.json
+        run: |
+          set -euo pipefail
+          # Remove checkout-seeded symlinks before restoring the reporter input.
+          rm -f -- old-results.json
+          cp "$AETHERTUNE_OSV_POLICY_DIR/old-results.json" old-results.json
+          python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"
 
       - name: Run osv-scanner-reporter
         uses: google/osv-scanner-action/osv-reporter-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57 # v2.6.0
