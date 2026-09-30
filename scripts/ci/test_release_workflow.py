@@ -42,9 +42,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         self.assertIn("concurrency:", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        # Additional step deadlines do not replace the eight job deadlines.
-        self.assertEqual(workflow.count("\n    timeout-minutes:"), 8)
-        self.assertEqual(workflow.count("persist-credentials: false"), 7)
+        # Additional step deadlines do not replace the nine job deadlines.
+        self.assertEqual(workflow.count("\n    timeout-minutes:"), 9)
+        self.assertEqual(workflow.count("persist-credentials: false"), 8)
 
     def test_production_mode_rejects_manual_dispatch_before_release_jobs(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -65,11 +65,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("exit 1", gate)
 
         for name in (
+            "release-trust",
             "provenance",
             "osv-scan",
-            "governance",
-            "android",
-            "desktop",
             "server",
         ):
             with self.subTest(job=name):
@@ -87,6 +85,110 @@ class ReleaseWorkflowTest(unittest.TestCase):
                     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
                     build,
                 )
+
+    def test_tag_trust_and_governance_finish_before_production_secrets_are_available(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        sections = re.split(r"(?m)^  ([a-z][a-z-]*):$", workflow.split("jobs:\n", 1)[1])
+        jobs = dict(zip(sections[1::2], sections[2::2]))
+
+        def dependencies(name: str) -> set[str]:
+            match = re.search(r"(?m)^    needs: \[([^\]]+)\]$", jobs[name])
+            self.assertIsNotNone(match, name)
+            return {item.strip() for item in match[1].split(",")}
+
+        def ancestors(name: str) -> set[str]:
+            result = set()
+            for dependency in dependencies(name):
+                result.add(dependency)
+                if dependency != "release-mode":
+                    result.update(ancestors(dependency))
+            return result
+
+        trust = jobs["release-trust"]
+        self.assertEqual(dependencies("release-trust"), {"release-mode"})
+        self.assertNotIn("secrets.", trust)
+        self.assertNotIn("environment:", trust)
+        self.assertIn("name: Checkout trusted release policy", trust)
+        self.assertIn(
+            "ref: @@{{ github.event.repository.default_branch }}".replace("@@", "$"),
+            trust,
+        )
+        self.assertIn("persist-credentials: false", trust)
+        self.assertIn("run: python3 scripts/ci/verify_github_tag.py --require-main", trust)
+        self.assertLess(
+            trust.index("Checkout trusted release policy"),
+            trust.index("scripts/ci/verify_github_tag.py --require-main"),
+        )
+        self.assertEqual(
+            dependencies("governance"), {"release-mode", "release-trust"}
+        )
+        for name in ("android", "desktop"):
+            with self.subTest(signing_job=name):
+                self.assertEqual(
+                    dependencies(name),
+                    {"release-mode", "release-trust", "governance"},
+                )
+        # Assert the complete dependency path for every job that reads a
+        # repository or environment secret, including the publish-time probe.
+        for name, job in jobs.items():
+            if "secrets." in job:
+                with self.subTest(credentialed_job=name):
+                    self.assertIn("release-trust", ancestors(name))
+        for name in ("release-trust", "governance", "android", "desktop"):
+            with self.subTest(fail_closed_job=name):
+                job_settings = jobs[name].split("    steps:\n", 1)[0]
+                self.assertNotIn("always()", job_settings)
+                self.assertNotIn("continue-on-error: true", jobs[name])
+                self.assertNotIn("failure()", job_settings)
+                self.assertNotIn("cancelled()", job_settings)
+
+    def test_nonpublishing_candidates_do_not_require_production_tag_or_governance(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        trust = workflow.split("  release-trust:\n", 1)[1].split(
+            "  provenance:\n", 1
+        )[0]
+        self.assertNotRegex(trust, r"(?m)^    if:")
+        production_step = trust.split(
+            "      - name: Verify production tag provenance and main ancestry\n", 1
+        )[1].split("      - name:", 1)[0]
+        self.assertIn(
+            "if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'",
+            production_step,
+        )
+        candidate_step = trust.split(
+            "      - name: Confirm candidate tag bypass is non-publishing\n", 1
+        )[1]
+        self.assertIn(
+            "if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true'",
+            candidate_step,
+        )
+        self.assertNotIn("verify_github_tag", candidate_step)
+        self.assertNotIn("secrets.", candidate_step)
+        governance = workflow.split("  governance:\n", 1)[1].split(
+            "  android:\n", 1
+        )[0]
+        production_governance = governance.split(
+            "      - name: Verify protected governance for production\n", 1
+        )[1].split("      - name:", 1)[0]
+        self.assertIn(
+            "if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'",
+            production_governance,
+        )
+        windows_packaging = workflow.split(
+            "      - name: Package Windows desktop app\n", 1
+        )[1].split("      - name:", 1)[0]
+        self.assertIn(
+            "WINDOWS_SIGNING_CERTIFICATE_PASSWORD: @@{{ "
+            "vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' && "
+            "secrets.AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD || '' }}".replace("@@", "$"),
+            windows_packaging,
+        )
+        for name in ("android", "desktop"):
+            build = workflow.split(f"  {name}:\n", 1)[1]
+            self.assertIn(
+                "'production' || 'candidate'",
+                re.split(r"(?m)^  [a-z][a-z-]*:$", build, maxsplit=1)[0],
+            )
 
     def test_assembly_checks_out_release_policy_before_running_verifiers(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
