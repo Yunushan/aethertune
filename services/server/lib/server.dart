@@ -592,6 +592,10 @@ Handler createServerHandler({
           'error': 'payload_too_large',
           'maxBytes': error.maxBytes,
         });
+      } on SharedPlaylistStorageException {
+        response = _jsonResponse(503, {
+          'error': 'shared_playlist_storage_unavailable',
+        });
       }
       final finishedAt = now().toUtc();
       recordResponseMetrics(
