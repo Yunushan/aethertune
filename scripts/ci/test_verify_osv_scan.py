@@ -285,7 +285,7 @@ class OsvWorkflowContractTest(unittest.TestCase):
         if os.name == "nt" and git_bash.is_file():
             bash = str(git_bash)
         if not bash:
-            self.skipTest("bash is required for workflow policy retention")
+            self.fail("bash is required for workflow policy retention")
         with tempfile.TemporaryDirectory(prefix="OSV checkout fixture ") as directory:
             fixture = Path(directory)
             workspace = fixture / "checkout"
@@ -322,6 +322,31 @@ class OsvWorkflowContractTest(unittest.TestCase):
                 self.assertEqual((policy / name).read_bytes(), content)
             self.assertIn('python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"', old_commands)
             self.assertIn('python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"', new_commands)
+
+            with self.subTest(checkout_seed="old evidence symlink to new evidence"):
+                old_results = workspace / "old-results.json"
+                new_results = workspace / "new-results.json"
+                old_results.unlink()
+                seeded_head = b"checkout-seeded current scan"
+                new_results.write_bytes(seeded_head)
+                try:
+                    old_results.symlink_to(new_results.name)
+                except OSError as error:
+                    if os.name == "nt" and getattr(error, "winerror", None) in {1, 50, 1314}:
+                        self.skipTest(f"Windows cannot create a native fixture symlink: {error}")
+                    raise
+                execute(new_commands.split("python3", 1)[0])
+                self.assertFalse(old_results.is_symlink())
+                self.assertEqual(old_results.read_bytes(), base_evidence)
+                self.assertEqual(new_results.read_bytes(), seeded_head)
+                # Model the runner removing its own seeded output and writing
+                # a fresh head scan. The old reporter input must stay distinct.
+                new_results.unlink()
+                completed_head = b"actual completed current scan with new findings"
+                new_results.write_bytes(completed_head)
+                self.assertEqual(old_results.read_bytes(), base_evidence)
+                self.assertEqual(new_results.read_bytes(), completed_head)
+                self.assertEqual((policy / "old-results.json").read_bytes(), base_evidence)
 
     def test_release_requires_the_guarded_workflow_and_failing_policy(self) -> None:
         workflow = (ROOT / ".github/workflows/aethertune-release.yml").read_text(encoding="utf-8")

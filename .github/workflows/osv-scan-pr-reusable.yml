@@ -74,6 +74,8 @@ jobs:
           OSV_SCAN_OUTPUT: new-results.json
         run: |
           set -euo pipefail
+          # Remove checkout-seeded symlinks before restoring the reporter input.
+          rm -f -- old-results.json
           cp "$AETHERTUNE_OSV_POLICY_DIR/old-results.json" old-results.json
           python3 "$AETHERTUNE_OSV_POLICY_DIR/run_osv_scan.py"
 
