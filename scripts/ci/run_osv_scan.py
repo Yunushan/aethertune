@@ -13,11 +13,11 @@ from typing import Sequence
 from verify_osv_scan import verify_osv_scan
 
 
-# Official google/osv-scanner-action v2.5.1, Linux amd64 manifest. Invoke the
+# Official google/osv-scanner-action v2.6.0, Linux amd64 manifest. Invoke the
 # binary directly: the image's legacy wrapper remaps no-packages exit 128 to 0.
 OSV_SCANNER_IMAGE = (
     "ghcr.io/google/osv-scanner-action@"
-    "sha256:dcd947131d8d11b8d0964de6590661fb921a4ecbd7b90a7cb21083acfc3fd8cc"
+    "sha256:13cef841c7b8de79248e572de0c278d64eaf0a4006e2973fa690b777be30eee4"
 )
 
 
