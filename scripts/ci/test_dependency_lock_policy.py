@@ -134,11 +134,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("contents: read", workflow)
         self.assertIn("security-events: write", workflow)
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-scanner-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-reporter-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             workflow,
         )
         self.assertIn("runs-on: ubuntu-latest", workflow)
@@ -148,12 +148,12 @@ class DependencyLockPolicyTest(unittest.TestCase):
         scanner_runner = (ROOT / "scripts/ci/run_osv_scan.py").read_text(encoding="utf-8")
         self.assertIn("ghcr.io/google/osv-scanner-action@", scanner_runner)
         self.assertIn(
-            "sha256:dcd947131d8d11b8d0964de6590661fb921a4ecbd7b90a7cb21083acfc3fd8cc",
+            "sha256:13cef841c7b8de79248e572de0c278d64eaf0a4006e2973fa690b777be30eee4",
             scanner_runner,
         )
         self.assertIn('"--entrypoint", "/root/osv-scanner"', scanner_runner)
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-reporter-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             reusable_workflow,
         )
         self.assertIn("--fail-on-vuln=true", workflow)
@@ -176,11 +176,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("merge_group:", workflow)
         self.assertIn("branches: [main]", workflow)
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-scanner-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             reusable_workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-reporter-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             reusable_workflow,
         )
         self.assertNotIn("Upload to code-scanning", reusable_workflow)
@@ -202,11 +202,11 @@ class DependencyLockPolicyTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-scanner-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             workflow,
         )
         self.assertIn(
-            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            "google/osv-scanner-action/osv-reporter-action@8ac9e5ce44cc7178e0e04229a91bdcc003166e57",
             workflow,
         )
         self.assertIn("--fail-on-vuln=true", workflow)
