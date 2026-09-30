@@ -144,81 +144,27 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final player = context.watch<PlayerController>();
     final library = context.watch<LibraryStore>();
     final current = player.current;
-    final savedCurrent = current == null
-        ? null
-        : _findTrack(library.tracks, current.id);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final compactActions =
+        MediaQuery.sizeOf(context).width < 800 || textScaler.scale(20) > 28;
+    final toolbarHeight = textScaler.scale(24) + 16;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Now playing'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'Save track share card',
-            onPressed: current == null
-                ? null
-                : () => _showTrackShareCard(current),
-            icon: const Icon(Icons.image_outlined),
-          ),
-          IconButton(
-            tooltip: 'Lyrics',
-            onPressed: current == null ? null : widget.onOpenLyrics,
-            icon: const Icon(Icons.subtitles_outlined),
-          ),
-          if (current?.hasTranscript ?? false)
-            IconButton(
-              key: const Key('now-playing-podcast-transcript'),
-              tooltip: 'Open podcast transcript',
-              onPressed: () => _openPodcastTranscript(current!.transcriptUri!),
-              icon: const Icon(Icons.article_outlined),
-            ),
-          IconButton(
-            tooltip: 'Queue',
-            onPressed: player.queue.isEmpty ? null : widget.onOpenQueue,
-            icon: const Icon(Icons.queue_music),
-          ),
-          if (savedCurrent != null)
-            IconButton(
-              key: const Key('now-playing-chapters-editor'),
-              tooltip: 'Edit chapters',
-              onPressed: () => _showTrackChaptersEditor(savedCurrent),
-              icon: const Icon(Icons.format_list_numbered),
-            ),
-          if (savedCurrent != null)
-            IconButton(
-              key: const Key('now-playing-skip-segments-editor'),
-              tooltip: 'Edit skip segments',
-              onPressed: () => _showTrackSkipSegmentsEditor(savedCurrent),
-              icon: const Icon(Icons.fast_forward_outlined),
-            ),
-          if (_canImportSponsorBlockSegments(savedCurrent))
-            IconButton(
-              key: const Key('now-playing-import-sponsorblock-segments'),
-              tooltip: 'Import SponsorBlock segments',
-              onPressed: () => _importSponsorBlockSegments(savedCurrent!),
-              icon: const Icon(Icons.download_for_offline_outlined),
-            ),
-          if (current != null)
-            _TrackPlaybackSpeedMenu(
-              player: player,
-              library: library,
-              track: current,
-            ),
-          if (current != null && player.supportsPitch)
-            _TrackPlaybackPitchMenu(player: player, track: current),
-          _PlaybackSpeedMenu(
-            player: player,
-            trackPlaybackSpeedOverride: current == null
-                ? null
-                : library.playbackSpeedForTrack(current.id),
-          ),
-          if (player.supportsPitch)
-            _PlaybackPitchMenu(
-              player: player,
-              trackPlaybackPitchOverride: current == null
-                  ? null
-                  : player.playbackPitchForTrack(current.id),
-            ),
-        ],
+        toolbarHeight: toolbarHeight < kToolbarHeight
+            ? kToolbarHeight
+            : toolbarHeight,
+        actions: compactActions
+            ? <Widget>[
+                IconButton(
+                  key: const Key('now-playing-more-actions'),
+                  tooltip: 'More player actions',
+                  onPressed: _showPlayerActions,
+                  icon: const Icon(Icons.more_vert),
+                ),
+              ]
+            : _playerActions(player: player, library: library),
       ),
       body: current == null
           ? const Center(child: Text('No track is currently selected.'))
@@ -315,6 +261,160 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
             ),
     );
+  }
+
+  void _showPlayerActions() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+          ),
+          child: Consumer2<LibraryStore, PlayerController>(
+            builder: (context, library, player, _) => ListView(
+              key: const Key('now-playing-actions-list'),
+              shrinkWrap: true,
+              children: <Widget>[
+                ListTile(
+                  title: Text(
+                    'Player actions',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Close player actions',
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+                ..._playerActions(
+                  player: player,
+                  library: library,
+                  showLabels: true,
+                  onActionSelected: () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _playerActions({
+    required PlayerController player,
+    required LibraryStore library,
+    bool showLabels = false,
+    VoidCallback? onActionSelected,
+  }) {
+    final current = player.current;
+    final savedCurrent = current == null
+        ? null
+        : _findTrack(library.tracks, current.id);
+    Widget action({
+      Key? key,
+      required String label,
+      required IconData icon,
+      required VoidCallback? onPressed,
+    }) {
+      final callback = onPressed == null
+          ? null
+          : () {
+              onActionSelected?.call();
+              onPressed();
+            };
+      return showLabels
+          ? ListTile(
+              key: key,
+              leading: Icon(icon),
+              title: Text(label),
+              minVerticalPadding: 12,
+              enabled: onPressed != null,
+              onTap: callback,
+            )
+          : IconButton(
+              key: key,
+              tooltip: label,
+              onPressed: callback,
+              icon: Icon(icon),
+            );
+    }
+
+    return <Widget>[
+      action(
+        label: 'Save track share card',
+        onPressed: current == null ? null : () => _showTrackShareCard(current),
+        icon: Icons.image_outlined,
+      ),
+      action(
+        label: 'Lyrics',
+        onPressed: current == null ? null : widget.onOpenLyrics,
+        icon: Icons.subtitles_outlined,
+      ),
+      if (current?.hasTranscript ?? false)
+        action(
+          key: const Key('now-playing-podcast-transcript'),
+          label: 'Open podcast transcript',
+          onPressed: () => _openPodcastTranscript(current!.transcriptUri!),
+          icon: Icons.article_outlined,
+        ),
+      action(
+        label: 'Queue',
+        onPressed: player.queue.isEmpty ? null : widget.onOpenQueue,
+        icon: Icons.queue_music,
+      ),
+      if (savedCurrent != null)
+        action(
+          key: const Key('now-playing-chapters-editor'),
+          label: 'Edit chapters',
+          onPressed: () => _showTrackChaptersEditor(savedCurrent),
+          icon: Icons.format_list_numbered,
+        ),
+      if (savedCurrent != null)
+        action(
+          key: const Key('now-playing-skip-segments-editor'),
+          label: 'Edit skip segments',
+          onPressed: () => _showTrackSkipSegmentsEditor(savedCurrent),
+          icon: Icons.fast_forward_outlined,
+        ),
+      if (_canImportSponsorBlockSegments(savedCurrent))
+        action(
+          key: const Key('now-playing-import-sponsorblock-segments'),
+          label: 'Import SponsorBlock segments',
+          onPressed: () => _importSponsorBlockSegments(savedCurrent!),
+          icon: Icons.download_for_offline_outlined,
+        ),
+      if (current != null)
+        _TrackPlaybackSpeedMenu(
+          player: player,
+          library: library,
+          track: current,
+          showLabel: showLabels,
+        ),
+      if (current != null && player.supportsPitch)
+        _TrackPlaybackPitchMenu(
+          player: player,
+          track: current,
+          showLabel: showLabels,
+        ),
+      _PlaybackSpeedMenu(
+        player: player,
+        trackPlaybackSpeedOverride: current == null
+            ? null
+            : library.playbackSpeedForTrack(current.id),
+        showLabel: showLabels,
+      ),
+      if (player.supportsPitch)
+        _PlaybackPitchMenu(
+          player: player,
+          trackPlaybackPitchOverride: current == null
+              ? null
+              : player.playbackPitchForTrack(current.id),
+          showLabel: showLabels,
+        ),
+    ];
   }
 
   void _finishArtworkSwipe(PlayerController player) {
@@ -1498,13 +1598,16 @@ class _NowPlayingControls extends StatelessWidget {
                 children: <Widget>[
                   const Icon(Icons.repeat, size: 16),
                   const SizedBox(width: 6),
-                  Text(
-                    player.isABRepeatActive
-                        ? 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
-                              'B ${_formatPlaybackTime(player.aBRepeatEnd!)}'
-                        : 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
-                              'Choose B',
-                    style: Theme.of(context).textTheme.labelMedium,
+                  Flexible(
+                    child: Text(
+                      player.isABRepeatActive
+                          ? 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
+                                'B ${_formatPlaybackTime(player.aBRepeatEnd!)}'
+                          : 'A ${_formatPlaybackTime(player.aBRepeatStart!)} '
+                                'Choose B',
+                      style: Theme.of(context).textTheme.labelMedium,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),
@@ -1523,9 +1626,12 @@ class _NowPlayingControls extends StatelessWidget {
                 children: <Widget>[
                   const Icon(Icons.fast_forward_outlined, size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                    'Auto-skip ${skipSegments.length} section(s)',
-                    style: Theme.of(context).textTheme.labelMedium,
+                  Flexible(
+                    child: Text(
+                      'Auto-skip ${skipSegments.length} section(s)',
+                      style: Theme.of(context).textTheme.labelMedium,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),
@@ -1546,75 +1652,99 @@ class _NowPlayingControls extends StatelessWidget {
           const SizedBox(height: 4),
           _PlaybackVolumeControl(player: player),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: <Widget>[
-              IconButton(
-                key: const Key('now-playing-shuffle'),
-                tooltip: player.shuffleEnabled
-                    ? 'Disable shuffle'
-                    : 'Enable shuffle',
-                isSelected: player.shuffleEnabled,
-                onPressed: () =>
-                    player.setShuffleEnabled(!player.shuffleEnabled),
-                icon: const Icon(Icons.shuffle),
-              ),
-              IconButton(
-                tooltip: 'Previous',
-                iconSize: 36,
-                onPressed: player.queue.isEmpty
-                    ? null
-                    : () => _runPlaybackAction(context, player.previous),
-                icon: const Icon(Icons.skip_previous),
-              ),
-              IconButton(
-                key: const Key('now-playing-skip-backward'),
-                tooltip:
-                    'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
-                onPressed: player.duration > Duration.zero
-                    ? player.skipBackward
-                    : null,
-                icon: const Icon(Icons.fast_rewind),
-              ),
-              IconButton.filled(
-                key: const Key('now-playing-play-pause'),
-                tooltip: player.isPlaying ? 'Pause' : 'Play',
-                iconSize: 40,
-                padding: const EdgeInsets.all(18),
-                onPressed: () =>
-                    _runPlaybackAction(context, player.togglePlayPause),
-                icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
-              ),
-              IconButton(
-                key: const Key('now-playing-skip-forward'),
-                tooltip:
-                    'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
-                onPressed: player.duration > Duration.zero
-                    ? player.skipForward
-                    : null,
-                icon: const Icon(Icons.fast_forward),
-              ),
-              IconButton(
-                tooltip: 'Next',
-                iconSize: 36,
-                onPressed: player.queue.isEmpty
-                    ? null
-                    : () => _runPlaybackAction(context, player.next),
-                icon: const Icon(Icons.skip_next),
-              ),
-              IconButton(
-                key: const Key('now-playing-repeat'),
-                tooltip: _repeatTooltip(player.loopMode),
-                isSelected: player.loopMode != LoopMode.off,
-                onPressed: () =>
-                    player.setLoopMode(_nextLoopMode(player.loopMode)),
-                icon: Icon(
-                  player.loopMode == LoopMode.one
-                      ? Icons.repeat_one
-                      : Icons.repeat,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final controls = <Widget>[
+                IconButton(
+                  key: const Key('now-playing-shuffle'),
+                  tooltip: player.shuffleEnabled
+                      ? 'Disable shuffle'
+                      : 'Enable shuffle',
+                  isSelected: player.shuffleEnabled,
+                  onPressed: () =>
+                      player.setShuffleEnabled(!player.shuffleEnabled),
+                  icon: const Icon(Icons.shuffle),
                 ),
-              ),
-            ],
+                IconButton(
+                  tooltip: 'Previous',
+                  iconSize: 36,
+                  onPressed: player.queue.isEmpty
+                      ? null
+                      : () => _runPlaybackAction(context, player.previous),
+                  icon: const Icon(Icons.skip_previous),
+                ),
+                IconButton(
+                  key: const Key('now-playing-skip-backward'),
+                  tooltip:
+                      'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
+                  onPressed: player.duration > Duration.zero
+                      ? player.skipBackward
+                      : null,
+                  icon: const Icon(Icons.fast_rewind),
+                ),
+                IconButton.filled(
+                  key: const Key('now-playing-play-pause'),
+                  tooltip: player.isPlaying ? 'Pause' : 'Play',
+                  iconSize: 40,
+                  padding: const EdgeInsets.all(18),
+                  onPressed: () =>
+                      _runPlaybackAction(context, player.togglePlayPause),
+                  icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
+                ),
+                IconButton(
+                  key: const Key('now-playing-skip-forward'),
+                  tooltip:
+                      'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
+                  onPressed: player.duration > Duration.zero
+                      ? player.skipForward
+                      : null,
+                  icon: const Icon(Icons.fast_forward),
+                ),
+                IconButton(
+                  tooltip: 'Next',
+                  iconSize: 36,
+                  onPressed: player.queue.isEmpty
+                      ? null
+                      : () => _runPlaybackAction(context, player.next),
+                  icon: const Icon(Icons.skip_next),
+                ),
+                IconButton(
+                  key: const Key('now-playing-repeat'),
+                  tooltip: _repeatTooltip(player.loopMode),
+                  isSelected: player.loopMode != LoopMode.off,
+                  onPressed: () =>
+                      player.setLoopMode(_nextLoopMode(player.loopMode)),
+                  icon: Icon(
+                    player.loopMode == LoopMode.one
+                        ? Icons.repeat_one
+                        : Icons.repeat,
+                  ),
+                ),
+              ];
+              if (constraints.maxWidth < 400) {
+                return Column(
+                  children: <Widget>[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[controls[1], controls[3], controls[5]],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: <Widget>[
+                        controls[0],
+                        controls[2],
+                        controls[4],
+                        controls[6],
+                      ],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: controls,
+              );
+            },
           ),
           const SizedBox(height: 18),
           Wrap(
@@ -1881,13 +2011,36 @@ class _VisualizerBarsPainter extends CustomPainter {
       oldDelegate.mutedColor != mutedColor;
 }
 
+class _PlaybackSettingMenuLabel extends StatelessWidget {
+  const _PlaybackSettingMenuLabel({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(icon),
+    title: Text(label),
+    subtitle: Text(value),
+    trailing: const Icon(Icons.arrow_drop_down),
+    minVerticalPadding: 12,
+  );
+}
+
 class _PlaybackSpeedMenu extends StatelessWidget {
   const _PlaybackSpeedMenu({
     required this.player,
     required this.trackPlaybackSpeedOverride,
+    this.showLabel = false,
   });
 
   final PlayerController player;
+  final bool showLabel;
   final double? trackPlaybackSpeedOverride;
 
   @override
@@ -1896,7 +2049,14 @@ class _PlaybackSpeedMenu extends StatelessWidget {
       key: const Key('now-playing-speed'),
       tooltip:
           'Default speed: ${_formatPlaybackSpeed(player.defaultPlaybackSpeed)}',
-      icon: const Icon(Icons.speed),
+      icon: showLabel ? null : const Icon(Icons.speed),
+      child: showLabel
+          ? _PlaybackSettingMenuLabel(
+              label: 'Default speed',
+              value: _formatPlaybackSpeed(player.defaultPlaybackSpeed),
+              icon: Icons.speed,
+            )
+          : null,
       onSelected: (speed) async {
         await player.setPlaybackSpeed(speed);
         final override = trackPlaybackSpeedOverride;
@@ -1920,9 +2080,11 @@ class _PlaybackPitchMenu extends StatelessWidget {
   const _PlaybackPitchMenu({
     required this.player,
     required this.trackPlaybackPitchOverride,
+    this.showLabel = false,
   });
 
   final PlayerController player;
+  final bool showLabel;
   final double? trackPlaybackPitchOverride;
 
   @override
@@ -1930,7 +2092,14 @@ class _PlaybackPitchMenu extends StatelessWidget {
     return PopupMenuButton<double>(
       key: const Key('now-playing-pitch'),
       tooltip: 'Pitch: ${_formatPlaybackSpeed(player.defaultPlaybackPitch)}',
-      icon: const Icon(Icons.music_note_outlined),
+      icon: showLabel ? null : const Icon(Icons.music_note_outlined),
+      child: showLabel
+          ? _PlaybackSettingMenuLabel(
+              label: 'Default pitch',
+              value: _formatPlaybackSpeed(player.defaultPlaybackPitch),
+              icon: Icons.music_note_outlined,
+            )
+          : null,
       onSelected: (pitch) async {
         await player.setPlaybackPitch(pitch);
         final override = trackPlaybackPitchOverride;
@@ -1955,9 +2124,11 @@ class _TrackPlaybackSpeedMenu extends StatelessWidget {
     required this.player,
     required this.library,
     required this.track,
+    this.showLabel = false,
   });
 
   final PlayerController player;
+  final bool showLabel;
   final LibraryStore library;
   final Track track;
 
@@ -1970,7 +2141,16 @@ class _TrackPlaybackSpeedMenu extends StatelessWidget {
       tooltip: override == null
           ? 'Track speed: Default (${_formatPlaybackSpeed(activeSpeed)})'
           : 'Track speed: ${_formatPlaybackSpeed(activeSpeed)}',
-      icon: const Icon(Icons.tune),
+      icon: showLabel ? null : const Icon(Icons.tune),
+      child: showLabel
+          ? _PlaybackSettingMenuLabel(
+              label: 'Track speed',
+              value: override == null
+                  ? 'Default (${_formatPlaybackSpeed(activeSpeed)})'
+                  : _formatPlaybackSpeed(activeSpeed),
+              icon: Icons.tune,
+            )
+          : null,
       onSelected: (selection) async {
         final speed = selection.speed;
         if (speed == null) {
@@ -2010,9 +2190,14 @@ class _TrackPlaybackSpeedSelection {
 }
 
 class _TrackPlaybackPitchMenu extends StatelessWidget {
-  const _TrackPlaybackPitchMenu({required this.player, required this.track});
+  const _TrackPlaybackPitchMenu({
+    required this.player,
+    required this.track,
+    this.showLabel = false,
+  });
 
   final PlayerController player;
+  final bool showLabel;
   final Track track;
 
   @override
@@ -2024,7 +2209,16 @@ class _TrackPlaybackPitchMenu extends StatelessWidget {
       tooltip: override == null
           ? 'Track pitch: Default (${_formatPlaybackSpeed(activePitch)})'
           : 'Track pitch: ${_formatPlaybackSpeed(activePitch)}',
-      icon: const Icon(Icons.music_note_outlined),
+      icon: showLabel ? null : const Icon(Icons.music_note_outlined),
+      child: showLabel
+          ? _PlaybackSettingMenuLabel(
+              label: 'Track pitch',
+              value: override == null
+                  ? 'Default (${_formatPlaybackSpeed(activePitch)})'
+                  : _formatPlaybackSpeed(activePitch),
+              icon: Icons.music_note_outlined,
+            )
+          : null,
       onSelected: (selection) async {
         final pitch = selection.pitch;
         if (pitch == null) {
@@ -2092,12 +2286,10 @@ class _PlaybackVolumeControl extends StatelessWidget {
                 : (value) => unawaited(player.setVolume(value)),
           ),
         ),
-        SizedBox(
-          width: 40,
-          child: Text(
-            PlayerController.formatVolume(player.volume),
-            textAlign: TextAlign.end,
-          ),
+        Text(
+          PlayerController.formatVolume(player.volume),
+          key: const Key('now-playing-volume-value'),
+          textAlign: TextAlign.end,
         ),
       ],
     );
@@ -2199,12 +2391,21 @@ class _PlaybackProgress extends StatelessWidget {
               _ChapterTimelineMarkers(chapters: chapters, duration: duration),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                runSpacing: 4,
                 children: <Widget>[
-                  Text(_formatPlaybackTime(position)),
+                  Text(
+                    _formatPlaybackTime(position),
+                    key: const Key('now-playing-elapsed'),
+                    semanticsLabel:
+                        'Elapsed time ${_formatPlaybackTime(position)}',
+                  ),
                   Text(
                     '-${_formatPlaybackTime(_remaining(duration, position))}',
+                    key: const Key('now-playing-remaining'),
+                    semanticsLabel:
+                        'Remaining time ${_formatPlaybackTime(_remaining(duration, position))}',
                   ),
                 ],
               ),
