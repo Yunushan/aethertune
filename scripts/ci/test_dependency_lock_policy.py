@@ -112,9 +112,10 @@ class DependencyLockPolicyTest(unittest.TestCase):
             dockerfile,
             r"FROM dart:[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64} AS build",
         )
-        self.assertRegex(
+        self.assertIn(
+            "FROM gcr.io/distroless/base-nossl-debian13:nonroot@"
+            "sha256:8c563c1fb5e120606f0d85733049775faed6192e2bd2223ef283a5393eec22b9",
             dockerfile,
-            r"FROM gcr.io/distroless/cc-debian13:nonroot@sha256:[0-9a-f]{64}",
         )
         self.assertNotRegex(dockerfile, r"FROM dart:[^@\s]+ AS build")
         self.assertNotRegex(dockerfile, r"FROM gcr.io/distroless/[^@\s]+\n")
@@ -143,7 +144,18 @@ class DependencyLockPolicyTest(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-latest", workflow)
         self.assertIn("Upload to code-scanning", workflow)
         self.assertIn("github/codeql-action/upload-sarif@", workflow)
-        self.assertIn("google/osv-scanner-action/osv-scanner-action@", reusable_workflow)
+        self.assertIn("python3 scripts/ci/run_osv_scan.py", reusable_workflow)
+        scanner_runner = (ROOT / "scripts/ci/run_osv_scan.py").read_text(encoding="utf-8")
+        self.assertIn("ghcr.io/google/osv-scanner-action@", scanner_runner)
+        self.assertIn(
+            "sha256:dcd947131d8d11b8d0964de6590661fb921a4ecbd7b90a7cb21083acfc3fd8cc",
+            scanner_runner,
+        )
+        self.assertIn('"--entrypoint", "/root/osv-scanner"', scanner_runner)
+        self.assertIn(
+            "google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d",
+            reusable_workflow,
+        )
         self.assertIn("--fail-on-vuln=true", workflow)
         self.assertIn("--lockfile=./apps/mobile/pubspec.lock", workflow)
         self.assertIn("--lockfile=./services/server/pubspec.lock", workflow)

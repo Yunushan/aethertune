@@ -26,17 +26,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run scanner
-        uses: google/osv-scanner-action/osv-scanner-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
-        continue-on-error: true
-        with:
-          scan-args: |-
-            --output=results.json
-            --format=json
-            ${{ inputs.scan-args }}
+      - name: Run scanner and verify evidence
+        shell: bash
+        env:
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+        run: python3 scripts/ci/run_osv_scan.py
 
       - name: Run osv-scanner-reporter
-        uses: google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.3.8
+        uses: google/osv-scanner-action/osv-reporter-action@8e5cf47b818121e8b405931c82126c2630b0b20d # v2.5.1
         with:
           scan-args: |-
             --output=results.sarif

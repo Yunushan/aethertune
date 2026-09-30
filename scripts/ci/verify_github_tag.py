@@ -47,6 +47,22 @@ def verify_tag_payloads(
         raise ValueError("GitHub release tag does not point to the workflow commit")
 
 
+def verify_main_ancestry_payload(
+    comparison: dict[str, Any], *, expected_sha: str
+) -> None:
+    """Require the workflow commit to be an ancestor of the current main ref."""
+    base = comparison.get("base_commit")
+    merge_base = comparison.get("merge_base_commit")
+    if (
+        comparison.get("status") not in ("ahead", "identical")
+        or not isinstance(base, dict)
+        or base.get("sha") != expected_sha
+        or not isinstance(merge_base, dict)
+        or merge_base.get("sha") != expected_sha
+    ):
+        raise ValueError("production release commit is not proven to be based on main")
+
+
 def _get_json(url: str, token: str) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
@@ -73,6 +89,8 @@ def verify_github_tag(
     expected_sha: str,
     token: str,
     api_url: str,
+    *,
+    require_main: bool = False,
 ) -> None:
     base = api_url.rstrip("/") + "/repos/" + repository
     encoded_tag = urllib.parse.quote(tag, safe="")
@@ -93,6 +111,13 @@ def verify_github_tag(
         expected_tag=tag,
         expected_sha=expected_sha,
     )
+    if require_main:
+        # Compare in this direction: main must be identical to or ahead of the
+        # release commit. Checking the merge base binds the API result to the
+        # exact workflow commit, without executing any tag-local policy.
+        encoded_sha = urllib.parse.quote(expected_sha, safe="")
+        comparison = _get_json(f"{base}/compare/{encoded_sha}...main", token)
+        verify_main_ancestry_payload(comparison, expected_sha=expected_sha)
 
 
 def main() -> None:
@@ -105,6 +130,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--api-url", default=os.environ.get("GITHUB_API_URL", "https://api.github.com")
+    )
+    parser.add_argument(
+        "--require-main",
+        action="store_true",
+        help="also require the release commit to be an ancestor of main",
     )
     arguments = parser.parse_args()
     if not arguments.repository:
@@ -122,11 +152,13 @@ def main() -> None:
             arguments.sha,
             arguments.token,
             arguments.api_url,
+            require_main=arguments.require_main,
         )
     except (OSError, RuntimeError, ValueError) as error:
         print(error, file=sys.stderr)
         raise SystemExit(1) from error
-    print(f"GitHub verified annotated tag passed: {arguments.tag}")
+    ancestry = " on main" if arguments.require_main else ""
+    print(f"GitHub verified annotated tag{ancestry} passed: {arguments.tag}")
 
 
 if __name__ == "__main__":

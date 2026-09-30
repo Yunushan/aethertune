@@ -105,7 +105,7 @@ def scan_command(name: str, image: Path, output: Path, cache: Path) -> list[str]
 
 def runtime_base_image() -> str:
     dockerfile = (ROOT / "services/server/Dockerfile").read_text(encoding="utf-8")
-    matches = re.findall(r"^FROM (gcr\.io/distroless/cc-debian13:nonroot@sha256:[0-9a-f]{64})$",
+    matches = re.findall(r"^FROM (gcr\.io/distroless/base-nossl-debian13:nonroot@sha256:[0-9a-f]{64})$",
                          dockerfile, re.MULTILINE)
     if len(matches) != 1:
         raise ValueError("Expected one digest-pinned, supported Distroless runtime base")
