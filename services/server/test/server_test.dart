@@ -1725,10 +1725,15 @@ void main() {
         expect(viewerHistory.statusCode, 200);
         final revisions = (await _json(viewerHistory))['revisions'] as List;
         expect(
-          revisions.map((value) => (value as Map)['revision']).toList(),
+          revisions
+              .map((value) => (value as Map<dynamic, dynamic>)['revision'])
+              .toList(),
           <int>[5, 4, 3, 2, 1],
         );
-        expect((revisions[1] as Map)['playlist'], isA<Map>());
+        expect(
+          (revisions[1] as Map<dynamic, dynamic>)['playlist'],
+          isA<Map<dynamic, dynamic>>(),
+        );
       },
     );
 

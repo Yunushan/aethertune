@@ -28,7 +28,7 @@ def clean_report():
 class ContainerScanTest(unittest.TestCase):
     def test_base_signature_requires_pinned_verifier_and_exact_publisher(self):
         base = scanner.runtime_base_image()
-        self.assertRegex(base, r"^gcr.io/distroless/cc-debian13:nonroot@sha256:[0-9a-f]{64}$")
+        self.assertRegex(base, r"^gcr.io/distroless/base-nossl-debian13:nonroot@sha256:[0-9a-f]{64}$")
         command = scanner.verification_command("unique", base)
         self.assertIn(scanner.COSIGN_IMAGE, command)
         self.assertEqual(command[command.index("--certificate-identity") + 1],
@@ -38,6 +38,26 @@ class ContainerScanTest(unittest.TestCase):
         for bypass in ("--insecure-ignore-tlog", "--insecure-ignore-sct", "--allow-insecure-registry",
                        "--certificate-identity-regexp", "--mount"):
             self.assertNotIn(bypass, command)
+
+    def test_runtime_base_rejects_mutable_unsupported_or_ambiguous_images(self):
+        supported = scanner.runtime_base_image()
+        invalid = [
+            "FROM gcr.io/distroless/base-nossl-debian13:nonroot",
+            "FROM gcr.io/distroless/base-nossl-debian12:nonroot@sha256:" + "a" * 64,
+            "FROM gcr.io/distroless/cc-debian13:nonroot@sha256:" + "a" * 64,
+            "FROM untrusted.example/base-nossl-debian13:nonroot@sha256:" + "a" * 64,
+            "FROM " + supported + "\nFROM " + supported,
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dockerfile = root / "services/server/Dockerfile"
+            dockerfile.parent.mkdir(parents=True)
+            with patch.object(scanner, "ROOT", root):
+                for value in invalid:
+                    with self.subTest(dockerfile=value):
+                        dockerfile.write_text(value + "\n", encoding="utf-8")
+                        with self.assertRaisesRegex(ValueError, "one digest-pinned, supported"):
+                            scanner.runtime_base_image()
 
     def test_database_requires_recent_versioned_timestamp(self):
         now = datetime.now(timezone.utc)

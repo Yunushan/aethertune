@@ -1423,17 +1423,18 @@ SharedPlaylistRemote _parseSharedPlaylist(String rawBody) {
       throw const FormatException('Shared playlist collaborators are invalid.');
     }
     for (final entry in rawCollaborators.entries) {
+      final key = entry.key;
       final collaboratorRole = _sharedPlaylistRoleFromWire(entry.value);
-      if (entry.key is! String ||
-          entry.key.trim().isEmpty ||
-          entry.key.length > 256 ||
+      if (key is! String ||
+          key.trim().isEmpty ||
+          key.length > 256 ||
           collaboratorRole == null ||
           collaboratorRole == SharedPlaylistAccessRole.owner) {
         throw const FormatException(
           'Shared playlist collaborators are invalid.',
         );
       }
-      collaborators[entry.key as String] = collaboratorRole;
+      collaborators[key] = collaboratorRole;
     }
   }
   return SharedPlaylistRemote(

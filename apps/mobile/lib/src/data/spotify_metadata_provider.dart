@@ -830,7 +830,7 @@ SpotifySearchPage parseSpotifySearchPage(String jsonText) {
   return SpotifySearchPage(
     tracks: items is List
         ? items
-              .whereType<Map>()
+              .whereType<Map<dynamic, dynamic>>()
               .map(
                 (item) =>
                     _trackFromSpotifyJson(Map<String, Object?>.from(item)),
@@ -896,7 +896,7 @@ List<MusicSourceSearchSuggestion> parseSpotifySearchSuggestions(
     if (items is! List) {
       return;
     }
-    for (final rawItem in items.whereType<Map>()) {
+    for (final rawItem in items.whereType<Map<dynamic, dynamic>>()) {
       final item = Map<String, Object?>.from(rawItem);
       add(_nonEmpty(item['name']), kind, subtitle: subtitleFor?.call(item));
     }
@@ -930,7 +930,7 @@ SpotifySavedTracksPage parseSpotifySavedTracksPage(String jsonText) {
   final items = root['items'];
   final tracks = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map((item) {
               final savedItem = Map<String, Object?>.from(item);
               final track = savedItem['track'];
@@ -967,7 +967,7 @@ SpotifySavedAlbumsPage parseSpotifySavedAlbumsPage(String jsonText) {
   final items = root['items'];
   final albums = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) =>
                   _savedAlbumFromSpotifyJson(Map<String, Object?>.from(item)),
@@ -1000,7 +1000,7 @@ SpotifySavedAlbumsPage parseSpotifyNewReleasesPage(String jsonText) {
   final items = albumsJson['items'];
   final albums = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) =>
                   _catalogAlbumFromSpotifyJson(Map<String, Object?>.from(item)),
@@ -1040,7 +1040,7 @@ SpotifySavedTracksPage parseSpotifySavedEpisodesPage(String jsonText) {
   final items = root['items'];
   final tracks = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map((item) {
               final savedItem = Map<String, Object?>.from(item);
               final episode = savedItem['episode'];
@@ -1076,7 +1076,7 @@ SpotifySavedShowsPage parseSpotifySavedShowsPage(String jsonText) {
   final items = root['items'];
   final shows = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) =>
                   _savedShowFromSpotifyJson(Map<String, Object?>.from(item)),
@@ -1108,7 +1108,7 @@ SpotifySavedTracksPage parseSpotifyShowEpisodesPage(
   final items = root['items'];
   final tracks = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) => _episodeTrackFromSpotifyJson(
                 Map<String, Object?>.from(item),
@@ -1164,7 +1164,7 @@ List<SpotifyTopArtist> _spotifyArtistsFromJsonItems(Object? items) {
     return const <SpotifyTopArtist>[];
   }
   return items
-      .whereType<Map>()
+      .whereType<Map<dynamic, dynamic>>()
       .map((item) {
         final artist = Map<String, Object?>.from(item);
         final id = _nonEmpty(artist['id']);
@@ -1190,7 +1190,7 @@ SpotifySavedTracksPage parseSpotifyTopTracksPage(String jsonText) {
   final items = root['items'];
   final tracks = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) => _trackFromSpotifyJson(Map<String, Object?>.from(item)),
             )
@@ -1218,7 +1218,7 @@ SpotifyRecentlyPlayedPage parseSpotifyRecentlyPlayedPage(String jsonText) {
   final items = root['items'];
   final history = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) => _recentlyPlayedItemFromSpotifyJson(
                 Map<String, Object?>.from(item),
@@ -1248,7 +1248,7 @@ SpotifyAlbumTracksPage parseSpotifyAlbumTracksPage(
   final items = root['items'];
   final tracks = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) => _trackFromSpotifyJson(
                 Map<String, Object?>.from(item),
@@ -1279,7 +1279,7 @@ SpotifySavedPlaylistsPage parseSpotifySavedPlaylistsPage(String jsonText) {
   final items = root['items'];
   final playlists = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) => _savedPlaylistFromSpotifyJson(
                 Map<String, Object?>.from(item),
@@ -1310,7 +1310,7 @@ SpotifyPlaylistTracksPage parseSpotifyPlaylistTracksPage(String jsonText) {
   final items = root['items'];
   final tracks = items is List
       ? items
-            .whereType<Map>()
+            .whereType<Map<dynamic, dynamic>>()
             .map(
               (item) => _playlistTrackFromSpotifyJson(
                 Map<String, Object?>.from(item),
@@ -1512,7 +1512,7 @@ String? _spotifyArtistNames(Object? artists) {
     return null;
   }
   final names = artists
-      .whereType<Map>()
+      .whereType<Map<dynamic, dynamic>>()
       .map((item) => _nonEmpty(item['name']))
       .whereType<String>()
       .toList(growable: false);
@@ -1523,7 +1523,7 @@ Uri? _spotifyArtworkUri(Object? images) {
   if (images is! List) {
     return null;
   }
-  for (final image in images.whereType<Map>()) {
+  for (final image in images.whereType<Map<dynamic, dynamic>>()) {
     final uri = Uri.tryParse(_nonEmpty(image['url']) ?? '');
     if (uri != null && uri.scheme == 'https' && uri.host.isNotEmpty) {
       return uri;

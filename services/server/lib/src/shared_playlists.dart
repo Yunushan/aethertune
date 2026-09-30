@@ -11,6 +11,21 @@ enum SharedPlaylistRole { viewer, editor }
 const sharedPlaylistInviteLifetime = Duration(days: 7);
 const maxSharedPlaylistHistoryEntries = 25;
 
+/// Committed playlist state could not be read or an invitation could not be revoked.
+class SharedPlaylistStorageException implements Exception {
+  const SharedPlaylistStorageException();
+
+  @override
+  String toString() => 'Shared playlist storage is unavailable.';
+}
+
+// File.exists/type can hide permission errors as absence. Only the operating
+// system's missing-file/path error proves that another operation removed it.
+bool _isMissingPlaylistFile(FileSystemException error) {
+  final code = error.osError?.errorCode;
+  return code == 2 || (Platform.isWindows && code == 3);
+}
+
 SharedPlaylistRole? sharedPlaylistRoleFromWire(Object? value) {
   return switch (value) {
     'viewer' => SharedPlaylistRole.viewer,
@@ -262,19 +277,23 @@ class FileSharedPlaylistStore implements SharedPlaylistStore {
       return null;
     }
     final file = _fileFor(playlistId);
-    if (!await file.exists()) {
-      return null;
-    }
     try {
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) {
-        return null;
+        throw const SharedPlaylistStorageException();
       }
-      return SharedPlaylistRecord.fromStorageJson(
+      final record = SharedPlaylistRecord.fromStorageJson(
         Map<String, Object?>.from(decoded),
       );
-    } on Object {
-      return null;
+      if (record.id != playlistId) {
+        throw const SharedPlaylistStorageException();
+      }
+      return record;
+    } on FileSystemException catch (error) {
+      if (_isMissingPlaylistFile(error)) return null;
+      throw const SharedPlaylistStorageException();
+    } on FormatException {
+      throw const SharedPlaylistStorageException();
     }
   }
 
@@ -553,11 +572,7 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
     if (!isSharedPlaylistInviteCode(inviteCode)) {
       return null;
     }
-    final file = _fileFor(inviteCode);
-    if (!await file.exists()) {
-      return null;
-    }
-    return _readInviteFile(file);
+    return _readInviteFile(_fileFor(inviteCode));
   }
 
   @override
@@ -591,23 +606,32 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
 
   @override
   Future<int> invalidateForPlaylist(String playlistId) async {
-    if (!_isSharedPlaylistId(playlistId) || !await rootDirectory.exists()) {
+    if (!_isSharedPlaylistId(playlistId)) {
       return 0;
     }
     var invalidated = 0;
-    await for (final entity in rootDirectory.list()) {
-      if (entity is! File || !entity.path.endsWith('.json')) {
-        continue;
+    try {
+      await for (final entity in rootDirectory.list()) {
+        if (entity is! File || !entity.path.endsWith('.json')) {
+          continue;
+        }
+        final invite = await _readInviteFile(entity);
+        if (invite?.playlistId != playlistId) {
+          continue;
+        }
+        try {
+          await entity.delete();
+          invalidated += 1;
+        } on FileSystemException catch (error) {
+          // A concurrent consume/delete is safe; a surviving capability is not.
+          if (!_isMissingPlaylistFile(error)) {
+            throw const SharedPlaylistStorageException();
+          }
+        }
       }
-      final invite = await _readInviteFile(entity);
-      if (invite?.playlistId != playlistId) {
-        continue;
-      }
-      try {
-        await entity.delete();
-        invalidated += 1;
-      } on FileSystemException {
-        // A concurrent consume/delete won the race; that code is invalid too.
+    } on FileSystemException catch (error) {
+      if (!_isMissingPlaylistFile(error)) {
+        throw const SharedPlaylistStorageException();
       }
     }
     return invalidated;
@@ -642,7 +666,11 @@ class FileSharedPlaylistInviteStore implements SharedPlaylistInviteStore {
         role: role,
         expiresAt: parsedExpiresAt,
       );
-    } on Object {
+    } on FileSystemException catch (error) {
+      if (_isMissingPlaylistFile(error)) return null;
+      throw const SharedPlaylistStorageException();
+    } on FormatException {
+      // Invalid invitation bytes cannot grant access.
       return null;
     }
   }

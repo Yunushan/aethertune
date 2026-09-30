@@ -100,6 +100,11 @@ void main() {
         expect(await prefs.setBool('aethertune.offline_mode.v1', true), isTrue);
         await vault.write(key: _secretKey, value: _secret);
       } else {
+        expect(prefs.getBool('aethertune.onboarding_completed.v1'), isTrue);
+        expect(prefs.getBool('aethertune.offline_mode.v1'), isTrue);
+        if (phase == 'reopen') {
+          passed('onboarding-offline-preferences-survived-process-restart');
+        }
         expect(prefs.getBool(_seeded), isTrue);
         expect(await media.exists(), isTrue);
       }

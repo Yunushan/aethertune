@@ -68,7 +68,7 @@ final class CustomCatalogStore extends ChangeNotifier {
       }
       final parsed = <CustomCatalogDefinition>[];
       final ids = <String>{};
-      for (final item in decoded.whereType<Map>()) {
+      for (final item in decoded.whereType<Map<dynamic, dynamic>>()) {
         try {
           final definition = CustomCatalogDefinition.fromJson(
             Map<String, Object?>.from(item),

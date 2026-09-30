@@ -190,10 +190,10 @@ A pushed `v*` tag creates the verified bundle, but publication is intentionally
 disabled unless the repository variable
 `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is exactly `true`. When enabled, the
 publish job also targets the `production` environment; configure selected
-deployment rules for the `main` branch and `v*` tags and require a separate
-release approval. Immediately before creating the immutable GitHub release, the
-publish job reruns the authenticated production operations probe so a stale
-scheduled result cannot mask a current outage. Production runs also require a
+deployment rules for the `main` branch and `v*` tags and require manual
+release approval under the ownership policy below. Immediately before creating
+the immutable GitHub release, the publish job reruns the authenticated production
+operations probe so a stale scheduled result cannot mask a current outage. Production runs also require a
 non-empty versioned `CHANGELOG.md`
 section matching the tag plus the checked-in feature matrix, 0BSD license, and
 NOTICE. Configure the repository variable only after platform signing,
@@ -214,9 +214,23 @@ repository. Set `AETHERTUNE_PRODUCTION_RELEASES_ENABLED=true` as a repository
 variable. Set `AETHERTUNE_PRODUCTION_BASE_URL` as a `production` environment
 variable and use an `https://` endpoint. The `production` environment must
 use selected deployment branch and tag rules with exactly a `main` branch rule
-and a `v*` tag rule. It must have a five-minute wait timer and at least one
-required reviewer with self-approval disabled; the approver must be a separate
-human or team from the release author. Configure a separate
+and a `v*` tag rule. It must have a wait timer of at least five minutes and
+administrator bypass disabled. Required reviewer policy follows
+[`verify_github_governance.py`](../scripts/ci/verify_github_governance.py):
+
+- **Confirmed sole-owner repository:** GitHub's direct-collaborator inventory
+  must contain the repository owner and no other collaborator. The `production`
+  environment requires that owner as a reviewer and allows owner self-approval.
+  `main` has no required pull-request-review rule; required status checks,
+  up-to-date branches, and administrator enforcement remain mandatory.
+- **Repository with multiple maintainers:** The `production` environment
+  requires an independent human or team reviewer and disables self-approval.
+  `main` requires at least one approving review, code-owner review, dismissal of
+  stale reviews, and approval after the last push. The verifier does not infer
+  sole-owner mode when collaborator evidence is missing or unverified.
+
+Both modes preserve the branch/tag boundaries, wait timer, administrator
+restrictions, and remaining governance checks. Configure a separate
 `production-monitoring` environment with exactly a `main` branch rule, no
 reviewer, wait timer, or custom protection gate, and administrator bypass
 disabled. The scheduled probe cannot pass a release approval unattended.
@@ -449,10 +463,16 @@ AetherTune is 0BSD licensed and has no telemetry. To prepare for F-Droid:
 - [ ] APK/AAB/IPA build instructions are verified.
 - [ ] License and third-party notices are updated.
 - [ ] `AETHERTUNE_PRODUCTION_RELEASES_ENABLED` is enabled only after signed-release approval.
-- [ ] The protected `production` environment has an independent release approver, a five-minute wait, exact `main` branch and `v*` tag deployment rules, and the required platform secrets.
+- [ ] The protected `production` environment has the required release approver
+  for its confirmed ownership mode: the repository owner in sole-owner mode, or
+  an independent reviewer with self-approval disabled in multiple-maintainer
+  mode. Both modes retain a wait of at least five minutes, exact `main` branch
+  and `v*` tag deployment rules, administrator bypass disabled, and the required
+  platform secrets.
 - [ ] The `production-monitoring` environment has only the `main` branch deployment rule, no approval gate, and only the probe URL and raw metrics-only token.
 - [ ] The scheduled repository governance audit passes with `AETHERTUNE_GOVERNANCE_TOKEN`.
-- [ ] A signed tag release has been installed on representative Android, iOS, macOS, and Windows hosts.
+- [ ] A signed tag release has been installed on representative Android, iOS,
+  Linux, macOS, and Windows hosts.
 - [ ] The server has been deployed behind TLS, and both public and loopback health/readiness probes pass.
 - [ ] The unattended production operations probe has passed from GitHub Actions and its failure notifications reach the on-call path.
 - [ ] A fresh server backup has been restored into an isolated data directory and its checksum verified.

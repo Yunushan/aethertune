@@ -101,8 +101,10 @@ void main() {
 
       final registryFile = (await _registryFiles(root)).single;
       final stored = jsonDecode(await registryFile.readAsString());
-      for (final account in (stored['accounts'] as List).cast<Map>()) {
-        for (final token in (account['tokens'] as List).cast<Map>()) {
+      for (final account
+          in (stored['accounts'] as List).cast<Map<dynamic, dynamic>>()) {
+        for (final token
+            in (account['tokens'] as List).cast<Map<dynamic, dynamic>>()) {
           token.remove('expiresAt');
         }
       }

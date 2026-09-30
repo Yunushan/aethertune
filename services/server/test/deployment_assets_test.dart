@@ -95,7 +95,7 @@ void main() {
       dockerfile,
       matches(
         RegExp(
-          r'FROM gcr.io/distroless/cc-debian13:nonroot@sha256:[0-9a-f]{64}',
+          r'FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:[0-9a-f]{64}',
         ),
       ),
     );

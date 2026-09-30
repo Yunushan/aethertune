@@ -830,7 +830,7 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     }
     final remoteIds = <String>{};
     final localIds = <String>{};
-    for (final value in privateBindings.whereType<Map>()) {
+    for (final value in privateBindings.whereType<Map<dynamic, dynamic>>()) {
       final binding = SharedSmartPlaylistBinding.tryFromJson(
         Map<String, Object?>.from(value),
       );
@@ -842,7 +842,8 @@ class SharedSmartPlaylistStore extends ChangeNotifier {
     }
     final subscriptionIds = <String>{};
     final subscriptionRemoteIds = <String>{};
-    for (final value in publicSubscriptions.whereType<Map>()) {
+    for (final value
+        in publicSubscriptions.whereType<Map<dynamic, dynamic>>()) {
       final subscription = PublicSmartPlaylistSubscription.tryFromJson(
         Map<String, Object?>.from(value),
       );
@@ -930,7 +931,7 @@ Map<String, Object?> _portableSharedSmartPlaylistRule(
   final rawGroups = normalized['ruleGroups'];
   if (rawGroups is List) {
     normalized['ruleGroups'] = rawGroups
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map(
           (group) => _portableSharedSmartPlaylistGroup(
             Map<String, Object?>.from(group),
@@ -948,7 +949,7 @@ Map<String, Object?> _portableSharedSmartPlaylistGroup(
   final rawRules = normalized['rules'];
   if (rawRules is List) {
     normalized['rules'] = rawRules
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map((rule) {
           final normalizedRule = Map<String, Object?>.from(rule);
           if (normalizedRule['field'] == 'sourceId') {
@@ -963,7 +964,7 @@ Map<String, Object?> _portableSharedSmartPlaylistGroup(
   final rawGroups = normalized['groups'];
   if (rawGroups is List) {
     normalized['groups'] = rawGroups
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map(
           (child) => _portableSharedSmartPlaylistGroup(
             Map<String, Object?>.from(child),

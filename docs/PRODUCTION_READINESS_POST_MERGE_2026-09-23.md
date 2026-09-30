@@ -1,5 +1,10 @@
 # Production Readiness After PR #40: 2026-09-24
 
+> Historical assessment. See the [current evidence checkpoint (2026-09-30)](PRODUCTION_READINESS_EVIDENCE_2026-09-30.md)
+> for current main, candidate validation, and remaining acceptance gates. The
+> weighted 81/100 below describes the September 24 revision; it is not a new
+> assessment of current main or the candidate.
+
 ## Decision
 
 **Published main: provisional 81/100. Broad production release: not yet

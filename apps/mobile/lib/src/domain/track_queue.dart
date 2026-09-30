@@ -42,7 +42,7 @@ class TrackQueueSnapshot {
   factory TrackQueueSnapshot.fromJson(Map<String, Object?> json) {
     final decodedTracks = json['tracks'] as List<dynamic>? ?? const <dynamic>[];
     final tracks = decodedTracks
-        .whereType<Map>()
+        .whereType<Map<dynamic, dynamic>>()
         .map((item) => Track.fromJson(Map<String, Object?>.from(item)))
         .toList(growable: false);
     final currentTrackId = json['currentTrackId'] as String?;

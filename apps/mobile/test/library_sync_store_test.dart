@@ -689,7 +689,7 @@ void main() {
       );
       expect(
         gateway.pushedProviderSnapshots.single['selfHostedAccounts'],
-        isA<Map>(),
+        isA<Map<dynamic, dynamic>>(),
       );
     },
   );
