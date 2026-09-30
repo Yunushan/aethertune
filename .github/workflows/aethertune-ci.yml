@@ -143,6 +143,9 @@ jobs:
       - name: Test dependency lock policy
         run: python3 scripts/ci/test_dependency_lock_policy.py
 
+      - name: Test OSV scan evidence gate
+        run: python3 scripts/ci/test_verify_osv_scan.py
+
       - name: Test toolchain pin policy
         run: python3 scripts/ci/test_toolchain_policy.py
 

@@ -28,6 +28,33 @@ jobs:
           echo 'Production releases require a pushed v* tag; disable production mode for manual candidates.' >&2
           exit 1
 
+  release-trust:
+    name: Verify production tag before credentialed jobs
+    needs: [release-mode]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Execute policy from the default branch before any signing environment or
+      # repository governance secret is available to a downstream job.
+      - name: Checkout trusted release policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Verify production tag provenance and main ancestry
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/verify_github_tag.py --require-main
+
+      - name: Confirm candidate tag bypass is non-publishing
+        if: vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true'
+        run: echo 'Candidate mode does not publish or use production signing credentials.'
+
   provenance:
     name: Release dependency provenance
     needs: [release-mode]
@@ -99,7 +126,7 @@ jobs:
 
   governance:
     name: Verify production governance
-    needs: [release-mode]
+    needs: [release-mode, release-trust]
     if: >-
       vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
@@ -125,7 +152,7 @@ jobs:
 
   android:
     name: Android release artifacts
-    needs: [release-mode]
+    needs: [release-mode, release-trust, governance]
     if: >-
       vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
@@ -224,7 +251,7 @@ jobs:
 
   desktop:
     name: Desktop release artifact (${{ matrix.target }})
-    needs: [release-mode]
+    needs: [release-mode, release-trust, governance]
     if: >-
       vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED != 'true' ||
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
@@ -528,7 +555,7 @@ jobs:
         if: matrix.target == 'windows'
         shell: pwsh
         env:
-          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true' && secrets.AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD || '' }}
         run: |
           $bundlePath = 'apps/mobile/build/windows/x64/runner/Release'
           $zipPath = 'release/aethertune-windows-x64.zip'
