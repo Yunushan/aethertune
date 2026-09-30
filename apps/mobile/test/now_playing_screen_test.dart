@@ -377,6 +377,340 @@ void main() {
     semantics.dispose();
   });
 
+  for (final width in <double>[320, 390]) {
+    for (final scale in <double>[1, 3]) {
+      for (final direction in TextDirection.values) {
+        testWidgets(
+          'full player fits ${width.toInt()}px at ${scale.toInt()}x text in ${direction.name}',
+          (tester) async {
+            tester.view.devicePixelRatio = 1;
+            tester.view.physicalSize = Size(width, 844);
+            addTearDown(tester.view.reset);
+            final semantics = tester.ensureSemantics();
+            try {
+              final engine = _FakePlaybackAudioEngine()
+                ..supportsPitchValue = true;
+              final player = PlayerController(audioEngine: engine);
+              final library = LibraryStore();
+              await library.load();
+              final track =
+                  _track(
+                    'narrow',
+                    title:
+                        'A long episode title that must remain accessible on a phone',
+                    durationSeconds: const Duration(hours: 100).inSeconds,
+                  ).copyWith(
+                    chapters: <TrackChapter>[
+                      TrackChapter(
+                        start: Duration.zero,
+                        title: 'Opening chapter',
+                      ),
+                    ],
+                    skipSegments: <TrackSkipSegment>[
+                      TrackSkipSegment(
+                        start: const Duration(seconds: 30),
+                        end: const Duration(seconds: 45),
+                        label: 'Intro',
+                      ),
+                    ],
+                    transcriptUri: Uri.parse(
+                      'https://example.test/episode.vtt',
+                    ),
+                    transcriptType: 'text/vtt',
+                    sourceId: 'youtube-data-metadata',
+                    externalId: 'video-123',
+                  );
+              await library.addTracks(<Track>[track]);
+              await player.playTrack(track, queue: <Track>[track]);
+              await engine.seek(const Duration(hours: 96));
+              player.setABRepeatStart(const Duration(hours: 96));
+              player.setABRepeatEnd(const Duration(hours: 96, seconds: 30));
+              await tester.pumpWidget(
+                MultiProvider(
+                  providers: [
+                    ChangeNotifierProvider<LibraryStore>.value(value: library),
+                    ChangeNotifierProvider<PlayerController>.value(
+                      value: player,
+                    ),
+                  ],
+                  child: MaterialApp(
+                    builder: (context, child) => MediaQuery(
+                      data: MediaQuery.of(
+                        context,
+                      ).copyWith(textScaler: TextScaler.linear(scale)),
+                      child: Directionality(
+                        textDirection: direction,
+                        child: child!,
+                      ),
+                    ),
+                    home: NowPlayingScreen(
+                      onOpenQueue: () {},
+                      onOpenLyrics: () {},
+                    ),
+                  ),
+                ),
+              );
+              await tester.pumpAndSettle();
+              expect(tester.takeException(), isNull);
+
+              await tester.ensureVisible(
+                find.byKey(const Key('now-playing-play-pause')),
+              );
+              await tester.pumpAndSettle();
+              for (final key in <String>[
+                'now-playing-shuffle',
+                'now-playing-skip-backward',
+                'now-playing-play-pause',
+                'now-playing-skip-forward',
+                'now-playing-repeat',
+              ]) {
+                final size = tester.getSize(find.byKey(Key(key)));
+                expect(size.width, greaterThanOrEqualTo(48));
+                expect(size.height, greaterThanOrEqualTo(48));
+              }
+              await expectLater(
+                tester,
+                meetsGuideline(labeledTapTargetGuideline),
+              );
+              await expectLater(
+                tester,
+                meetsGuideline(androidTapTargetGuideline),
+              );
+              await tester.tap(find.byKey(const Key('now-playing-play-pause')));
+              await tester.pumpAndSettle();
+              expect(engine.playingValue, isFalse);
+              if (scale == 3) {
+                expect(
+                  tester
+                      .getSize(
+                        find.byKey(const Key('now-playing-volume-value')),
+                      )
+                      .width,
+                  greaterThan(40),
+                );
+              }
+              expect(tester.takeException(), isNull);
+            } finally {
+              semantics.dispose();
+            }
+          },
+        );
+      }
+    }
+  }
+
+  for (final (scale, direction) in <(double, TextDirection)>[
+    (1, TextDirection.ltr),
+    (3, TextDirection.rtl),
+  ]) {
+    testWidgets(
+      'phone player actions preserve settings and navigation at ${scale.toInt()}x in ${direction.name}',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(320, 844);
+        addTearDown(tester.view.reset);
+        final semantics = tester.ensureSemantics();
+        try {
+          final engine = _FakePlaybackAudioEngine()..supportsPitchValue = true;
+          final player = PlayerController(audioEngine: engine);
+          final library = LibraryStore();
+          await library.load();
+          final track =
+              _track(
+                'phone-actions',
+                title: 'Phone episode',
+                durationSeconds: 300,
+              ).copyWith(
+                transcriptUri: Uri.parse('https://example.test/episode.vtt'),
+                transcriptType: 'text/vtt',
+                sourceId: 'youtube-data-metadata',
+                externalId: 'video-123',
+              );
+          await library.addTracks(<Track>[track]);
+          await player.playTrack(track, queue: <Track>[track]);
+          var queueOpens = 0;
+          var lyricsOpens = 0;
+          await tester.pumpWidget(
+            MultiProvider(
+              providers: [
+                ChangeNotifierProvider<LibraryStore>.value(value: library),
+                ChangeNotifierProvider<PlayerController>.value(value: player),
+              ],
+              child: MaterialApp(
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: TextScaler.linear(scale)),
+                  child: Directionality(
+                    textDirection: direction,
+                    child: child!,
+                  ),
+                ),
+                home: NowPlayingScreen(
+                  onOpenQueue: () => queueOpens += 1,
+                  onOpenLyrics: () => lyricsOpens += 1,
+                  podcastTranscriptLoader: (_) async =>
+                      const PodcastTranscriptDocument(
+                        text: 'Accessible transcript',
+                        contentType: 'text/plain',
+                      ),
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('now-playing-more-actions')));
+          await tester.pumpAndSettle();
+          final sheetScroll = find.descendant(
+            of: find.byKey(const Key('now-playing-actions-list')),
+            matching: find.byType(Scrollable),
+          );
+          Finder sheetLabel(String label) => find.descendant(
+            of: find.byKey(const Key('now-playing-actions-list')),
+            matching: find.text(label),
+          );
+          for (final label in <String>[
+            'Save track share card',
+            'Lyrics',
+            'Open podcast transcript',
+            'Queue',
+            'Edit chapters',
+            'Edit skip segments',
+            'Import SponsorBlock segments',
+            'Track speed',
+            'Track pitch',
+            'Default speed',
+            'Default pitch',
+          ]) {
+            await tester.scrollUntilVisible(
+              sheetLabel(label),
+              180,
+              scrollable: sheetScroll,
+            );
+            await tester.pumpAndSettle();
+            expect(tester.takeException(), isNull);
+          }
+          await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+          await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('now-playing-speed')),
+            -180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('now-playing-speed')));
+          await tester.pumpAndSettle();
+          final speedItem = find.widgetWithText(
+            CheckedPopupMenuItem<double>,
+            '1.5x',
+          );
+          await tester.ensureVisible(speedItem);
+          await tester.pumpAndSettle();
+          await tester.tap(speedItem);
+          await tester.pumpAndSettle();
+          expect(player.defaultPlaybackSpeed, 1.5);
+
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('now-playing-pitch')),
+            180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('now-playing-pitch')));
+          await tester.pumpAndSettle();
+          final pitchItem = find.widgetWithText(
+            CheckedPopupMenuItem<double>,
+            '1.25x',
+          );
+          await tester.ensureVisible(pitchItem);
+          await tester.pumpAndSettle();
+          await tester.tap(pitchItem);
+          await tester.pumpAndSettle();
+          expect(player.defaultPlaybackPitch, 1.25);
+
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('now-playing-track-speed')),
+            -180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('now-playing-track-speed')));
+          await tester.pumpAndSettle();
+          final trackSpeedItem = find.byKey(
+            const Key('now-playing-track-speed-2.0'),
+          );
+          await tester.ensureVisible(trackSpeedItem);
+          await tester.pumpAndSettle();
+          await tester.tap(trackSpeedItem);
+          await tester.pumpAndSettle();
+          expect(library.playbackSpeedForTrack(track.id), 2);
+          expect(engine.speedValue, 2);
+
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('now-playing-track-pitch')),
+            180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('now-playing-track-pitch')));
+          await tester.pumpAndSettle();
+          final trackPitchItem = find.byKey(
+            const Key('now-playing-track-pitch-0.75'),
+          );
+          await tester.ensureVisible(trackPitchItem);
+          await tester.pumpAndSettle();
+          await tester.tap(trackPitchItem);
+          await tester.pumpAndSettle();
+          expect(player.playbackPitchForTrack(track.id), 0.75);
+          expect(engine.pitchValue, 0.75);
+
+          await tester.scrollUntilVisible(
+            sheetLabel('Queue'),
+            -180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(sheetLabel('Queue'));
+          await tester.pumpAndSettle();
+          expect(queueOpens, 1);
+          expect(find.text('Player actions'), findsNothing);
+
+          await tester.tap(find.byKey(const Key('now-playing-more-actions')));
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            sheetLabel('Lyrics'),
+            180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(sheetLabel('Lyrics'));
+          await tester.pumpAndSettle();
+          expect(lyricsOpens, 1);
+          expect(find.text('Player actions'), findsNothing);
+
+          await tester.tap(find.byKey(const Key('now-playing-more-actions')));
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.byKey(const Key('now-playing-podcast-transcript')),
+            180,
+            scrollable: sheetScroll,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const Key('now-playing-podcast-transcript')),
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('Accessible transcript'), findsOneWidget);
+          expect(find.text('Player actions'), findsNothing);
+          expect(tester.takeException(), isNull);
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+  }
+
   testWidgets('podcast transcript reader retries a failed user request', (
     tester,
   ) async {
