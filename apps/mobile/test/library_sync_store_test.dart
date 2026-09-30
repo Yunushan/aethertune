@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'support/library_storage_fixture.dart';
@@ -882,6 +883,69 @@ void main() {
       expect(prefs.getString('aethertune.library_sync.metadata.v1'), isNull);
     },
   );
+
+  test(
+    'rejected metadata removal retains the account and its vault token',
+    () async {
+      final backend = _RejectingMetadataRemovePreferences();
+      SharedPreferencesStorePlatform.instance = backend;
+      final vault = _MemorySyncVault();
+      final gateway = _FakeSyncGateway(
+        remote: const LibrarySyncRemoteSnapshot(revision: 0),
+      );
+      final sync = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+      );
+      final library = LibraryStore();
+      await library.load();
+      await sync.load();
+      await sync.testAndSave(library, _account(), 'private-token');
+
+      backend.rejectMetadataRemove = true;
+      await expectLater(sync.remove(), throwsStateError);
+      expect(sync.isConfigured, isTrue);
+      expect(vault.token, 'private-token');
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.reload();
+      expect(
+        preferences.getString('aethertune.library_sync.metadata.v1'),
+        isNotNull,
+      );
+      final restored = LibrarySyncStore(
+        credentialVault: vault,
+        clientFactory: (account, token) => gateway,
+      );
+      await restored.load();
+      expect(restored.isConfigured, isTrue);
+
+      backend.rejectMetadataRemove = false;
+      await sync.remove();
+      expect(sync.isConfigured, isFalse);
+      expect(vault.token, isNull);
+      await preferences.reload();
+      expect(
+        preferences.getString('aethertune.library_sync.metadata.v1'),
+        isNull,
+      );
+    },
+  );
+}
+
+class _RejectingMetadataRemovePreferences
+    extends InMemorySharedPreferencesStore {
+  _RejectingMetadataRemovePreferences() : super.empty();
+
+  bool rejectMetadataRemove = false;
+
+  @override
+  Future<bool> remove(String key) async {
+    if (rejectMetadataRemove &&
+        key == 'flutter.aethertune.library_sync.metadata.v1') {
+      return false;
+    }
+    return super.remove(key);
+  }
 }
 
 LibrarySyncAccount _account({String deviceId = 'Test device'}) {

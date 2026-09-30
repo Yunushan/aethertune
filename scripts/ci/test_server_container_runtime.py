@@ -48,6 +48,7 @@ class ContainerRuntimeTest(unittest.TestCase):
             self.assertIn("--read-only", command)
             self.assertIn("no-new-privileges=true", command)
             self.assertIn("AETHERTUNE_OPS_TOKEN", command)
+            self.assertIn("AETHERTUNE_METRICS_TOKEN", command)
             self.assertNotIn(fixture.credentials[0], " ".join(command))
             self.assertEqual(fixture.port, 12345)
 

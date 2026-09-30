@@ -29,12 +29,14 @@ class Fixture:
         self.volume_created = False
         self.containers = []
         self.credentials = [secrets.token_urlsafe(32)]
+        self.metrics_token = secrets.token_urlsafe(32)
         self.port = None
 
     def docker(self, *arguments, check=True, timeout=45):
         result = subprocess.run(
             ["docker", *arguments], capture_output=True, text=True, timeout=timeout,
-            env={**os.environ, "AETHERTUNE_OPS_TOKEN": self.credentials[0]},
+            env={**os.environ, "AETHERTUNE_OPS_TOKEN": self.credentials[0],
+                 "AETHERTUNE_METRICS_TOKEN": self.metrics_token},
         )
         if check:
             require(result.returncode == 0, f"Docker {arguments[0]} failed: {result.stderr.strip()}")
@@ -47,7 +49,7 @@ class Fixture:
         self.docker("volume", "create", "--label", f"aethertune.fixture={self.identity}", self.volume)
         self.volume_created = True
 
-    def start(self, image, phase, *, ready=True, operations=True):
+    def start(self, image, phase, *, ready=True, operations=True, metrics=True):
         command = [
             "create", "--name", f"{self.identity}-{phase}",
             "--label", f"aethertune.fixture={self.identity}",
@@ -61,6 +63,8 @@ class Fixture:
         ]
         if operations:
             command += ["--env", "AETHERTUNE_OPS_TOKEN"]
+        if metrics:
+            command += ["--env", "AETHERTUNE_METRICS_TOKEN"]
         container = self.docker(*command, image).stdout.strip()
         require(re.fullmatch(r"[0-9a-f]{64}", container), "Docker returned an invalid container ID")
         self.containers.append((container, phase))
@@ -128,8 +132,8 @@ class Fixture:
             try:
                 output = self.docker("logs", container)
                 log = output.stdout + output.stderr
-                exposed = any(credential in log for credential in self.credentials)
-                for credential in self.credentials:
+                exposed = any(credential in log for credential in [*self.credentials, self.metrics_token])
+                for credential in [*self.credentials, self.metrics_token]:
                     log = log.replace(credential, "[redacted]")
                 (self.evidence / f"{phase}.log").write_text(log, encoding="utf-8")
                 if exposed:
@@ -172,7 +176,6 @@ def run(image, source_image, evidence):
         fixture.request("GET", "/health")
         fixture.request("GET", "/api/v1/info")
         fixture.request("GET", "/api/v1/metrics", status=401)
-        fixture.request("GET", "/api/v1/metrics", token=fixture.credentials[0])
         active, revoked = fixture.issue("Active"), fixture.issue("Revoked")
         token = active["token"]
         fixture.request("DELETE", "/api/v1/admin/sync-tokens", token=fixture.credentials[0],
@@ -184,6 +187,8 @@ def run(image, source_image, evidence):
         checks.append("source_graceful_shutdown")
 
         candidate = fixture.start(image, "candidate")
+        fixture.request("GET", "/api/v1/metrics", token=fixture.credentials[0], status=401)
+        fixture.request("GET", "/api/v1/metrics", token=fixture.metrics_token)
         require(fixture.inspect(candidate)["Config"]["User"] == "10001:999", "Volume identity changed")
         identities = [line.split()[1:3] for line in fixture.docker("top", candidate, "-eo", "pid,uid,gid").stdout.splitlines()[1:]]
         require(identities and all(identity == ["10001", "999"] for identity in identities),
@@ -216,6 +221,9 @@ def run(image, source_image, evidence):
         missing_ops = fixture.start(image, "missing-operations", ready=False, operations=False)
         fixture.expect_refusal(missing_ops, "AETHERTUNE_OPS_TOKEN is required", exit_code="255")
         checks.append("missing_operations_secret_refused")
+        missing_metrics = fixture.start(image, "missing-metrics", ready=False, metrics=False)
+        fixture.expect_refusal(missing_metrics, "AETHERTUNE_METRICS_TOKEN is required", exit_code="255")
+        checks.append("missing_metrics_secret_refused")
         report["result"] = "passed"
     except (OSError, ValueError, KeyError, AssertionError, subprocess.SubprocessError, http.client.HTTPException) as error:
         report["error"] = str(error)

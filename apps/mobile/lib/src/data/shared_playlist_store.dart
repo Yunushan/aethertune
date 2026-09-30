@@ -117,6 +117,8 @@ class SharedPlaylistStore extends ChangeNotifier {
   SharedPlaylistGatewayFactory? _gatewayFactory;
   final List<SharedPlaylistBinding> _bindings = <SharedPlaylistBinding>[];
   bool _loaded = false;
+  Future<void>? _loadFuture;
+  String? _loadError;
   bool _busy = false;
   String? _lastError;
 
@@ -135,10 +137,14 @@ class SharedPlaylistStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> load() async {
+  Future<void> load() {
     if (_loaded) {
-      return;
+      return Future<void>.value();
     }
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     try {
       final raw = (await SharedPreferences.getInstance()).getString(
         _metadataKey,
@@ -163,10 +169,12 @@ class SharedPlaylistStore extends ChangeNotifier {
           }
         }
       }
+      _loadError = null;
       _lastError = null;
     } on Object {
       _bindings.clear();
-      _lastError = 'Could not load shared playlist settings.';
+      _loadError = 'Could not load shared playlist settings.';
+      _lastError = _loadError;
     } finally {
       _loaded = true;
       notifyListeners();
@@ -188,7 +196,8 @@ class SharedPlaylistStore extends ChangeNotifier {
       if (bindingForLocalPlaylist(playlist.id) != null) {
         throw StateError('This playlist is already shared.');
       }
-      final remote = await _requireGateway().createSharedPlaylist(
+      final gateway = _requireGateway();
+      final remote = await gateway.createSharedPlaylist(
         name: playlist.name,
         trackIds: playlist.trackIds,
         trackReferences: _trackReferencesFor(library, playlist.trackIds),
@@ -202,8 +211,20 @@ class SharedPlaylistStore extends ChangeNotifier {
         updatedByDevice: remote.updatedByDevice,
         collaborators: remote.collaborators,
       );
-      await _addBinding(binding);
-      return binding;
+      try {
+        await _addBinding(binding);
+        return binding;
+      } on Object {
+        try {
+          await gateway.deleteSharedPlaylist(
+            playlistId: remote.id,
+            baseRevision: remote.revision,
+          );
+        } on Object {
+          // Keep the original binding failure for the caller.
+        }
+        rethrow;
+      }
     });
   }
 
@@ -223,20 +244,29 @@ class SharedPlaylistStore extends ChangeNotifier {
         return bindingForLocalPlaylist(binding.localPlaylistId)!;
       }
       final playlist = await library.createPlaylist(remote.name);
-      final resolution = _trackResolutionForRemote(library, remote);
-      await library.replacePlaylistTracks(playlist.id, resolution.trackIds);
-      final binding = SharedPlaylistBinding(
-        remoteId: remote.id,
-        localPlaylistId: playlist.id,
-        revision: remote.revision,
-        role: remote.role,
-        updatedAt: remote.updatedAt,
-        updatedByDevice: remote.updatedByDevice,
-        collaborators: remote.collaborators,
-        unavailableTrackCount: resolution.unavailableTrackCount,
-      );
-      await _addBinding(binding);
-      return binding;
+      try {
+        final resolution = _trackResolutionForRemote(library, remote);
+        await library.replacePlaylistTracks(playlist.id, resolution.trackIds);
+        final binding = SharedPlaylistBinding(
+          remoteId: remote.id,
+          localPlaylistId: playlist.id,
+          revision: remote.revision,
+          role: remote.role,
+          updatedAt: remote.updatedAt,
+          updatedByDevice: remote.updatedByDevice,
+          collaborators: remote.collaborators,
+          unavailableTrackCount: resolution.unavailableTrackCount,
+        );
+        await _addBinding(binding);
+        return binding;
+      } on Object {
+        try {
+          await library.deletePlaylist(playlist.id);
+        } on Object {
+          // Keep the original import failure for the caller.
+        }
+        rethrow;
+      }
     });
   }
 
@@ -671,9 +701,7 @@ class SharedPlaylistStore extends ChangeNotifier {
   }
 
   Future<void> _addBinding(SharedPlaylistBinding binding) async {
-    _bindings.add(binding);
-    await _save();
-    notifyListeners();
+    await _commitBindings(<SharedPlaylistBinding>[..._bindings, binding]);
   }
 
   Future<void> _replaceBinding(SharedPlaylistBinding updated) async {
@@ -683,23 +711,39 @@ class SharedPlaylistStore extends ChangeNotifier {
     if (index == -1) {
       throw StateError('Shared playlist binding no longer exists.');
     }
-    _bindings[index] = updated;
-    await _save();
-    notifyListeners();
+    final next = List<SharedPlaylistBinding>.from(_bindings)..[index] = updated;
+    await _commitBindings(next);
   }
 
   Future<void> _removeBinding(SharedPlaylistBinding binding) async {
-    _bindings.removeWhere((item) => item.remoteId == binding.remoteId);
-    await _save();
-    notifyListeners();
+    final next = List<SharedPlaylistBinding>.from(_bindings)
+      ..removeWhere((item) => item.remoteId == binding.remoteId);
+    await _commitBindings(next);
   }
 
-  Future<void> _save() async {
+  Future<void> _commitBindings(List<SharedPlaylistBinding> next) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _metadataKey,
-      jsonEncode(_bindings.map((binding) => binding.toJson()).toList()),
-    );
+    try {
+      final saved = await prefs.setString(
+        _metadataKey,
+        jsonEncode(next.map((binding) => binding.toJson()).toList()),
+      );
+      if (!saved) {
+        throw StateError('Could not save shared playlist settings.');
+      }
+    } on Object {
+      // SharedPreferences updates its cache before the platform write.
+      try {
+        await prefs.reload();
+      } on Object {
+        // Preserve the original write failure.
+      }
+      rethrow;
+    }
+    _bindings
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
   }
 
   Future<T> _runBusy<T>(Future<T> Function() action) async {
@@ -710,6 +754,12 @@ class SharedPlaylistStore extends ChangeNotifier {
     _lastError = null;
     notifyListeners();
     try {
+      await load();
+      if (_loadError != null) {
+        throw StateError(
+          'Could not load shared playlist settings. Resolve the storage error before editing shared playlists.',
+        );
+      }
       return await action();
     } on Object catch (error) {
       _lastError = error.toString();

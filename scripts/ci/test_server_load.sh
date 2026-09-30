@@ -27,6 +27,7 @@ env \
   AETHERTUNE_DATA_DIR="$data_directory/data" \
   AETHERTUNE_LISTEN_ADDRESS=127.0.0.1 \
   AETHERTUNE_OPS_TOKEN=ci-only-load-test-token \
+  AETHERTUNE_METRICS_TOKEN=ci-only-load-metrics-token \
   AETHERTUNE_SYNC_USERS='{}' \
   PORT="$port" \
   "$server_executable" >"$log_file" 2>&1 &

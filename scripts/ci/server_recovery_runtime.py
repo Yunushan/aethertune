@@ -53,6 +53,7 @@ class Server:
             self.port = reservation.getsockname()[1]
         environment = {key: value for key, value in os.environ.items() if not key.startswith('AETHERTUNE_')}
         environment.update(AETHERTUNE_DATA_DIR=str(self.data), AETHERTUNE_OPS_TOKEN=self.operations,
+                           AETHERTUNE_METRICS_TOKEN='ci-only-recovery-metrics-token',
                            AETHERTUNE_SYNC_USERS='{}', AETHERTUNE_LISTEN_ADDRESS='127.0.0.1', PORT=str(self.port))
         self.output = self.log.open('ab')
         self.process = subprocess.Popen([str(self.executable)], env=environment, stdout=self.output,

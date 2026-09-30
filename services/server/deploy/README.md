@@ -8,7 +8,10 @@ portable library snapshots. Back up its state before host or image changes.
 
 1. Copy `services/server/.env.example` to `services/server/.env`, leave
    `AETHERTUNE_SYNC_USERS={}` for managed accounts, and set a long random
-   `AETHERTUNE_OPS_TOKEN`. Keep `AETHERTUNE_BIND_ADDRESS=127.0.0.1`; Docker
+   `AETHERTUNE_OPS_TOKEN` and a different long random
+   `AETHERTUNE_METRICS_TOKEN`. Existing self-hosted deployments must add the
+   metrics token before upgrading: the new executable refuses to start without
+   it. Keep `AETHERTUNE_BIND_ADDRESS=127.0.0.1`; Docker
    uses `AETHERTUNE_LISTEN_ADDRESS=0.0.0.0` only inside its network namespace.
    Startup rejects the checked-in placeholder value, so replace it before
    running Compose.
@@ -33,7 +36,7 @@ portable library snapshots. Back up its state before host or image changes.
    curl --fail http://127.0.0.1:8080/ready
    curl --fail https://sync.example.com/health
    curl --fail https://sync.example.com/ready
-   curl --fail -H 'Authorization: Bearer your-operations-token' \
+   curl --fail -H 'Authorization: Bearer your-metrics-token' \
      https://sync.example.com/api/v1/metrics
    ```
 
@@ -73,6 +76,7 @@ sudo install -m 0755 aethertune-server /usr/local/bin/aethertune-server
 sudo install -m 0644 deploy/aethertune.service /etc/systemd/system/aethertune.service
 sudo install -d -m 0700 /etc/aethertune
 sudo install -m 0600 deploy/server.env.example /etc/aethertune/server.env
+sudoedit /etc/aethertune/server.env
 sudo systemctl daemon-reload
 sudo systemctl enable --now aethertune
 sudo systemctl status aethertune
@@ -83,6 +87,9 @@ from `1` through `65535`) and
 `AETHERTUNE_LISTEN_ADDRESS` (default `127.0.0.1`), then writes snapshots to the
 systemd-managed `/var/lib/aethertune` state directory. Place the supplied
 `Caddyfile` in front of the service exactly as in the Docker setup.
+Replace both token placeholders with distinct long random values during the
+`sudoedit` step. `AETHERTUNE_OPS_PROBE_TOKEN` must contain the raw metrics token
+even if `AETHERTUNE_METRICS_TOKEN` stores its `sha256:` digest.
 
 Install the checked-in backup service and timer after creating the backup
 directory. The timer creates a checksum-verified archive every day and keeps
@@ -233,16 +240,21 @@ restore ownership, or rollback compatibility between different release schemas.
 
 Run the same health, readiness, and authenticated metrics contract used by
 Compose against the deployed endpoint. The scheduled systemd probe checks the
-loopback service every five minutes and exits non-zero when any endpoint or
-metrics counter is unhealthy; collect its journal/failure state in the host's
-monitoring system. Set `AETHERTUNE_OPS_PROBE_TOKEN` in the root-only env file
-to the raw operations token. This is required when the server's
-`AETHERTUNE_OPS_TOKEN` is stored as a `sha256:` digest; never put the probe
-token in a unit file or command-line argument. The probe accepts HTTPS for
+loopback service every five minutes and exits non-zero when an endpoint fails,
+its JSON status identifies the wrong service or state, or authenticated metrics
+are missing or malformed. It prints cumulative 5xx and rate-limit counts but
+does not apply alert thresholds to them; configure the host's monitoring
+system to evaluate increases and collect the probe's journal/failure state.
+Set `AETHERTUNE_OPS_PROBE_TOKEN` in the root-only env file to the raw metrics
+token, despite the variable's legacy name. This is required when the server's
+`AETHERTUNE_METRICS_TOKEN` is stored as a `sha256:` digest. Rotate any existing
+probe credential from the operations token to the distinct metrics token before
+upgrading; never put the probe token in a unit file or command-line argument.
+The probe accepts HTTPS for
 remote hosts and loopback HTTP for local checks only:
 
 ```bash
-AETHERTUNE_OPS_PROBE_TOKEN='your-operations-token' \
+AETHERTUNE_OPS_PROBE_TOKEN='your-metrics-token' \
   /usr/local/libexec/aethertune-ops-probe.sh https://sync.example.com
 ```
 
@@ -250,6 +262,16 @@ For a remote monitor, run the same probe against the public HTTPS URL from a
 separate host or monitoring worker. Local systemd timers cannot detect a
 complete host outage, so retain an off-host alert for public `/ready` failures,
 5xx responses, rate-limit spikes, and missing probe/backup timer runs.
+
+The GitHub Actions production probe runs every 15 minutes using the
+`production-monitoring` environment. Give that environment only the public
+HTTPS URL and raw metrics token as `AETHERTUNE_OPS_PROBE_TOKEN`, allow the exact
+`main` branch, and leave
+reviewers and wait timers unset so checks can run unattended. The release
+publish job uses separate copies of those values in the reviewer-gated
+`production` environment. This metrics token cannot administer managed
+accounts; protect both copies as secrets. Keep `AETHERTUNE_OPS_TOKEN` on the
+server and out of `production-monitoring`.
 
 Test updates on a backup first. After an update, verify `/health` locally and
 through HTTPS before configuring the AetherTune app in Options with the public

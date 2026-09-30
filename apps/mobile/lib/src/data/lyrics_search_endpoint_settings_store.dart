@@ -15,6 +15,8 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
   Uri? _endpoint;
   bool _loaded = false;
   String? _loadError;
+  Future<void>? _loadFuture;
+  Future<void> _mutationTail = Future<void>.value();
 
   bool get loaded => _loaded;
   String? get loadError => _loadError;
@@ -38,10 +40,14 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
     };
   }
 
-  Future<void> load() async {
+  Future<void> load() {
     if (_loaded) {
-      return;
+      return Future<void>.value();
     }
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _endpoint = _parseEndpoint(prefs.getString(_endpointKey));
@@ -54,26 +60,62 @@ final class LyricsSearchEndpointSettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> save(String endpoint) async {
+  Future<void> save(String endpoint) => _serialize(() async {
     final parsed = _parseEndpoint(endpoint);
     if (parsed == null) {
       throw const FormatException(
         'Enter an HTTPS LRCLIB-compatible service URL.',
       );
     }
+    await load();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_endpointKey, parsed.toString());
+    try {
+      final saved = await prefs.setString(_endpointKey, parsed.toString());
+      if (!saved) {
+        throw StateError('Could not save the lyrics search endpoint.');
+      }
+    } on Object {
+      try {
+        await prefs.reload();
+      } on Object {
+        // Preserve the original write failure.
+      }
+      rethrow;
+    }
     _endpoint = parsed;
     _loadError = null;
     notifyListeners();
-  }
+  });
 
-  Future<void> remove() async {
+  Future<void> remove() => _serialize(() async {
+    await load();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_endpointKey);
+    try {
+      await prefs.remove(_endpointKey);
+      await prefs.reload();
+      if (prefs.containsKey(_endpointKey)) {
+        throw StateError('Could not remove the lyrics search endpoint.');
+      }
+    } on Object {
+      try {
+        await prefs.reload();
+      } on Object {
+        // Preserve the original removal failure.
+      }
+      rethrow;
+    }
     _endpoint = null;
     _loadError = null;
     notifyListeners();
+  });
+
+  Future<T> _serialize<T>(Future<T> Function() mutation) {
+    final result = _mutationTail.then((_) => mutation());
+    _mutationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
   }
 
   /// Replaces this device's configured service with a validated synced value.

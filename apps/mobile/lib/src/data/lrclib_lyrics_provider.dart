@@ -45,7 +45,19 @@ class LyricsSearchCacheSettingsStore {
   Future<void> saveRetention(Duration retention) async {
     _requireSupportedLyricsSearchCacheLifetime(retention);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_retentionDaysKey, retention.inDays);
+    try {
+      final saved = await prefs.setInt(_retentionDaysKey, retention.inDays);
+      if (!saved) {
+        throw StateError('Could not save lyrics cache retention.');
+      }
+    } on Object {
+      try {
+        await prefs.reload();
+      } on Object {
+        // Preserve the original write failure.
+      }
+      rethrow;
+    }
   }
 }
 

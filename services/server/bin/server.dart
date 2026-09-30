@@ -44,6 +44,18 @@ Future<void> main() async {
     final operationsAuthenticator = StaticOperationsAuthenticator(
       operationsToken,
     );
+    final metricsToken = Platform.environment['AETHERTUNE_METRICS_TOKEN'];
+    if (metricsToken == null || metricsToken.isEmpty) {
+      throw const FormatException(
+        'AETHERTUNE_METRICS_TOKEN is required for server deployments.',
+      );
+    }
+    final metricsAuthenticator = StaticMetricsAuthenticator(metricsToken);
+    if (operationsAndMetricsTokensMatch(operationsToken, metricsToken)) {
+      throw const FormatException(
+        'AETHERTUNE_METRICS_TOKEN must differ from AETHERTUNE_OPS_TOKEN.',
+      );
+    }
     final requestRateLimiter = serverRequestRateLimiterFromEnvironment(
       Platform.environment,
     );
@@ -54,6 +66,7 @@ Future<void> main() async {
           syncAuthenticator: combinedSyncAuthenticator,
           managedSyncAccounts: managedSyncAccounts,
           operationsAuthenticator: operationsAuthenticator,
+          metricsAuthenticator: metricsAuthenticator,
           requestRateLimiter: requestRateLimiter,
           syncStore: FileLibrarySyncSnapshotStore(dataDirectory),
           providerConfigurationStore: FileLibrarySyncSnapshotStore(

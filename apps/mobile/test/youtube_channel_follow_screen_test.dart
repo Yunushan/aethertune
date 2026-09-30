@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/youtube_channel_follow_store.dart';
@@ -129,6 +131,98 @@ void main() {
     expect(find.text('Channel signal'), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsNothing);
   });
+
+  testWidgets('disables a channel toggle while its follow write is pending', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final backend = _PausedFollowPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final library = LibraryStore();
+    final follows = YouTubeChannelFollowStore();
+    await Future.wait<void>(<Future<void>>[library.load(), follows.load()]);
+    addTearDown(library.dispose);
+    addTearDown(follows.dispose);
+    final provider = YouTubeDataMetadataProvider(
+      apiKey: 'project-key',
+      searchLoader: (_) async =>
+          _channelPage('Aether Radio', 'channel-1', null),
+    );
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<YouTubeChannelFollowStore>.value(
+            value: follows,
+          ),
+        ],
+        child: MaterialApp(
+          home: YouTubeChannelFollowScreen(provider: provider),
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byKey(const Key('youtube-channel-search')),
+      'aether',
+    );
+    await tester.tap(find.byTooltip('Search YouTube channels'));
+    await tester.pumpAndSettle();
+
+    backend.pauseNextFollowWrite();
+    await tester.tap(find.byTooltip('Follow channel'));
+    await backend.writeStarted;
+    await tester.pump();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byTooltip('Follow channel'),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(follows.isFollowed('channel-1'), isFalse);
+    backend.resumeWrite();
+    await tester.pumpAndSettle();
+    expect(follows.isFollowed('channel-1'), isTrue);
+    expect(backend.followWrites, 1);
+  });
+}
+
+class _PausedFollowPreferences extends InMemorySharedPreferencesStore {
+  _PausedFollowPreferences() : super.empty();
+
+  Completer<void>? _pause;
+  Completer<void>? _active;
+  Completer<void>? _started;
+  int followWrites = 0;
+
+  Future<void> get writeStarted => _started!.future;
+
+  void pauseNextFollowWrite() {
+    _pause = Completer<void>();
+    _started = Completer<void>();
+  }
+
+  void resumeWrite() => _active?.complete();
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key == 'flutter.aethertune.youtube_channel_follows.v1') {
+      followWrites += 1;
+      final pause = _pause;
+      if (pause != null) {
+        _pause = null;
+        _active = pause;
+        _started?.complete();
+        await pause.future;
+        _active = null;
+      }
+    }
+    return super.setValue(valueType, key, value);
+  }
 }
 
 String _channelPage(String title, String id, String? nextPageToken) =>

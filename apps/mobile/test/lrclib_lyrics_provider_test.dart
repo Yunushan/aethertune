@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:aethertune/src/data/lrclib_lyrics_provider.dart';
 import 'package:aethertune/src/domain/lyrics_provider.dart';
@@ -99,6 +100,35 @@ void main() {
     await expectLater(
       settings.saveRetention(const Duration(days: 2)),
       throwsArgumentError,
+    );
+  });
+
+  test('rejected retention changes keep the prior durable policy', () async {
+    final backend = _FaultyRetentionPreferences();
+    SharedPreferencesStorePlatform.instance = backend;
+    final settings = LyricsSearchCacheSettingsStore();
+    await settings.saveRetention(const Duration(days: 90));
+
+    backend.rejectWrites = true;
+    await expectLater(
+      settings.saveRetention(const Duration(days: 1)),
+      throwsStateError,
+    );
+    expect(await settings.loadRetention(), const Duration(days: 90));
+
+    backend.rejectWrites = false;
+    backend.throwWrites = true;
+    await expectLater(
+      settings.saveRetention(const Duration(days: 1)),
+      throwsStateError,
+    );
+    expect(await settings.loadRetention(), const Duration(days: 90));
+
+    backend.throwWrites = false;
+    await settings.saveRetention(const Duration(days: 1));
+    expect(
+      await LyricsSearchCacheSettingsStore().loadRetention(),
+      const Duration(days: 1),
     );
   });
 
@@ -252,6 +282,26 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+}
+
+final class _FaultyRetentionPreferences extends InMemorySharedPreferencesStore {
+  _FaultyRetentionPreferences() : super.empty();
+
+  bool rejectWrites = false;
+  bool throwWrites = false;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (key.endsWith('aethertune.lrclib.search_cache_retention_days.v1')) {
+      if (rejectWrites) {
+        return false;
+      }
+      if (throwWrites) {
+        throw StateError('Retention write failed.');
+      }
+    }
+    return super.setValue(valueType, key, value);
+  }
 }
 
 class _MemorySearchCache implements LrcLibSearchCache {

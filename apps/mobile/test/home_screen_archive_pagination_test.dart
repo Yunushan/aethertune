@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:aethertune/src/data/internet_archive_provider.dart';
+import 'package:aethertune/src/data/radio_browser_provider.dart';
 import 'package:aethertune/src/data/library_store.dart';
 import 'package:aethertune/src/data/library_sync_store.dart';
 import 'package:aethertune/src/data/local_folder_watch_store.dart';
@@ -126,6 +127,100 @@ void main() {
       expect(pageTwoAttempts, 2);
     },
   );
+  testWidgets('searches Radio Browser stations from Sources', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.reset);
+
+    final library = LibraryStore();
+    await library.load();
+    addTearDown(library.dispose);
+    final selfHosted = SelfHostedProviderStore();
+    await selfHosted.load();
+    addTearDown(selfHosted.dispose);
+    final sync = LibrarySyncStore();
+    await sync.load();
+    addTearDown(sync.dispose);
+    final folderWatch = LocalFolderWatchStore()..updateLibrary(library);
+    addTearDown(folderWatch.dispose);
+    final player = PlayerController(audioEngine: _TestPlaybackAudioEngine());
+    addTearDown(player.dispose);
+    var searchRequests = 0;
+    final provider = RadioBrowserProvider(
+      baseUri: Uri.parse('https://de1.api.radio-browser.info'),
+      searchLoader: (_) async {
+        searchRequests += 1;
+        return jsonEncode(<Object?>[
+          <String, Object?>{
+            'stationuuid': 'station-1',
+            'name': 'Aether Radio',
+            'url_resolved': 'https://stream.example.test/aac',
+            'countrycode': 'US',
+            'language': 'english',
+            'codec': 'AAC',
+            'bitrate': 128,
+            'lastcheckok': 1,
+            'tags': 'jazz,ambient',
+            'votes': 1,
+          },
+        ]);
+      },
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LibraryStore>.value(value: library),
+          ChangeNotifierProvider<SelfHostedProviderStore>.value(
+            value: selfHosted,
+          ),
+          ChangeNotifierProvider<LibrarySyncStore>.value(value: sync),
+          ChangeNotifierProvider<LocalFolderWatchStore>.value(
+            value: folderWatch,
+          ),
+          ChangeNotifierProvider<PlayerController>.value(value: player),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeScreen(initialTab: 4, radioBrowserProvider: provider),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final stationSearch = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField &&
+          widget.decoration?.labelText == 'Station search',
+    );
+    final sourcesList = find.byKey(const Key('sources-scroll-view'));
+    for (
+      var attempt = 0;
+      attempt < 40 && stationSearch.evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(sourcesList, const Offset(0, -400));
+      await tester.pump();
+    }
+    expect(stationSearch, findsOneWidget);
+
+    await tester.enterText(stationSearch, 'Aether');
+    await tester.tap(find.byTooltip('Search stations'));
+    await tester.pumpAndSettle();
+    expect(searchRequests, 1);
+
+    final station = find.text('Aether Radio');
+    for (
+      var attempt = 0;
+      attempt < 40 && station.evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.drag(sourcesList, const Offset(0, -400));
+      await tester.pump();
+    }
+    expect(station, findsOneWidget);
+  });
 }
 
 String _searchJson(List<String> identifiers) {

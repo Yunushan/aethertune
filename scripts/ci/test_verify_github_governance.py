@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from verify_github_governance import (
@@ -12,7 +13,7 @@ from verify_github_governance import (
     REQUIRED_SECURITY_FEATURES,
     REQUIRED_STATUS_CHECKS,
     verify_github_governance,
-    verify_governance_payloads,
+    verify_governance_payloads as _verify_governance_payloads,
 )
 
 
@@ -56,9 +57,37 @@ def valid_environment() -> dict[str, object]:
             {"type": "wait_timer", "wait_timer": 5},
         ],
         "deployment_branch_policy": {
-            "protected_branches": True,
-            "custom_branch_policies": False,
+            "protected_branches": False,
+            "custom_branch_policies": True,
         },
+    }
+
+
+def valid_production_policies() -> dict[str, object]:
+    return {
+        "total_count": 2,
+        "branch_policies": [
+            {"type": "branch", "name": "main"},
+            {"type": "tag", "name": "v*"},
+        ],
+    }
+
+
+def valid_monitoring_environment() -> dict[str, object]:
+    return {
+        "can_admins_bypass": False,
+        "protection_rules": [{"type": "branch_policy"}],
+        "deployment_branch_policy": {
+            "protected_branches": False,
+            "custom_branch_policies": True,
+        },
+    }
+
+
+def valid_monitoring_policies() -> dict[str, object]:
+    return {
+        "total_count": 1,
+        "branch_policies": [{"type": "branch", "name": "main"}],
     }
 
 
@@ -87,6 +116,25 @@ def valid_selected_actions() -> dict[str, object]:
     }
 
 
+def verify_governance_payloads(*args: Any, **kwargs: Any) -> None:
+    """Exercise the audit with valid deployment policy fixtures by default."""
+    kwargs.setdefault("production_branch_policies", valid_production_policies())
+    kwargs.setdefault("monitoring_environment", valid_monitoring_environment())
+    kwargs.setdefault("monitoring_branch_policies", valid_monitoring_policies())
+    _verify_governance_payloads(*args, **kwargs)
+
+
+def valid_payloads() -> tuple[Any, ...]:
+    return (
+        valid_branch_protection(),
+        valid_environment(),
+        CODEOWNERS,
+        valid_repository_payload(),
+        valid_actions_permissions(),
+        valid_selected_actions(),
+    )
+
+
 class GithubGovernanceTest(unittest.TestCase):
     def test_accepts_protected_main_and_production_environment(self) -> None:
         verify_governance_payloads(
@@ -97,6 +145,88 @@ class GithubGovernanceTest(unittest.TestCase):
             valid_actions_permissions(),
             valid_selected_actions(),
         )
+
+    def test_rejects_protected_branches_only_for_tag_release(self) -> None:
+        environment = valid_environment()
+        environment["deployment_branch_policy"] = {
+            "protected_branches": True,
+            "custom_branch_policies": False,
+        }
+        payloads = list(valid_payloads())
+        payloads[1] = environment
+        with self.assertRaisesRegex(ValueError, "selected branch and tag policies"):
+            verify_governance_payloads(*payloads)
+
+    def test_rejects_missing_or_wrongly_typed_release_ref(self) -> None:
+        for policies in (
+            {
+                "total_count": 1,
+                "branch_policies": [{"type": "branch", "name": "main"}],
+            },
+            {
+                "total_count": 2,
+                "branch_policies": [
+                    {"type": "branch", "name": "main"},
+                    {"type": "branch", "name": "v*"},
+                ],
+            },
+            {
+                "total_count": 2,
+                "branch_policies": [
+                    {"name": "main"},
+                    {"type": "tag", "name": "v*"},
+                ],
+            },
+            {
+                "total_count": 3,
+                "branch_policies": valid_production_policies()["branch_policies"],
+            },
+            {
+                "total_count": 3,
+                "branch_policies": [
+                    {"type": "branch", "name": "main"},
+                    {"type": "tag", "name": "v*"},
+                    {"type": "branch", "name": "*"},
+                ],
+            },
+        ):
+            with self.subTest(policies=policies):
+                with self.assertRaisesRegex(ValueError, "main branch and v\\* tag rule"):
+                    verify_governance_payloads(
+                        *valid_payloads(), production_branch_policies=policies
+                    )
+
+    def test_rejects_missing_environment_policy_data(self) -> None:
+        with self.assertRaisesRegex(ValueError, "main branch and v\\* tag rule"):
+            _verify_governance_payloads(*valid_payloads())
+
+    def test_rejects_monitoring_review_or_wait_gate(self) -> None:
+        for gate in ("required_reviewers", "wait_timer", "custom"):
+            environment = valid_monitoring_environment()
+            environment["protection_rules"] = [{"type": gate}]
+            with self.subTest(gate=gate):
+                with self.assertRaisesRegex(ValueError, "no reviewer, wait, or app gate"):
+                    verify_governance_payloads(
+                        *valid_payloads(), monitoring_environment=environment
+                    )
+
+    def test_rejects_monitoring_tag_or_unrestricted_policy(self) -> None:
+        for policies in (
+            {
+                "total_count": 1,
+                "branch_policies": [{"type": "tag", "name": "main"}],
+            },
+            {
+                "total_count": 1,
+                "branch_policies": [{"type": "branch", "name": "*"}],
+            },
+            {"total_count": 0, "branch_policies": []},
+        ):
+            with self.subTest(policies=policies):
+                with self.assertRaisesRegex(ValueError, "exactly a main branch rule"):
+                    verify_governance_payloads(
+                        *valid_payloads(), monitoring_branch_policies=policies
+                    )
 
     def test_accepts_workflow_and_job_status_check_name(self) -> None:
         protection = valid_branch_protection()
@@ -288,6 +418,9 @@ class GithubGovernanceTest(unittest.TestCase):
                 },
                 valid_branch_protection(),
                 owner_environment,
+                valid_production_policies(),
+                valid_monitoring_environment(),
+                valid_monitoring_policies(),
                 valid_actions_permissions(),
                 valid_selected_actions(),
             ]
@@ -299,7 +432,7 @@ class GithubGovernanceTest(unittest.TestCase):
                     "https://api.github.com",
                     ROOT / ".github" / "CODEOWNERS",
                 )
-            self.assertEqual(get_json.call_count, 5)
+            self.assertEqual(get_json.call_count, 8)
             get_list.assert_called_once()
 
     def test_rejects_environment_without_wait_timer(self) -> None:

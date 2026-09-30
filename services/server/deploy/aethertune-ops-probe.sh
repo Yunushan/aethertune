@@ -2,9 +2,9 @@
 set -euo pipefail
 
 base_url="${1:?Usage: aethertune-ops-probe.sh BASE_URL}"
-ops_token="${AETHERTUNE_OPS_PROBE_TOKEN:-${AETHERTUNE_OPS_TOKEN:-}}"
-if [[ -z "$ops_token" ]]; then
-  echo 'AETHERTUNE_OPS_PROBE_TOKEN or AETHERTUNE_OPS_TOKEN is required' >&2
+metrics_token="${AETHERTUNE_OPS_PROBE_TOKEN:-${AETHERTUNE_METRICS_TOKEN:-}}"
+if [[ -z "$metrics_token" ]]; then
+  echo 'AETHERTUNE_OPS_PROBE_TOKEN or AETHERTUNE_METRICS_TOKEN is required' >&2
   exit 2
 fi
 
@@ -24,10 +24,30 @@ case "$base_url" in
     ;;
 esac
 curl_options=(--fail --silent --show-error --connect-timeout 5 --max-time 15)
-curl "${curl_options[@]}" "$base_url/health" >/dev/null
-curl "${curl_options[@]}" "$base_url/ready" >/dev/null
+validate_status_response() {
+  local endpoint="$1"
+  local expected_status="$2"
+  local body="$3"
+  python3 -c '
+import json
+import sys
+
+endpoint, expected_status = sys.argv[1:]
+try:
+    payload = json.load(sys.stdin)
+except ValueError:
+    raise SystemExit(f"{endpoint} response is not valid JSON")
+if not isinstance(payload, dict) or payload.get("service") != "aethertune-server" or payload.get("status") != expected_status:
+    raise SystemExit(f"{endpoint} response failed the server status contract")
+' "$endpoint" "$expected_status" <<< "$body"
+}
+
+health_body="$(curl "${curl_options[@]}" "$base_url/health")"
+validate_status_response /health ok "$health_body"
+ready_body="$(curl "${curl_options[@]}" "$base_url/ready")"
+validate_status_response /ready ready "$ready_body"
 metrics_body="$(curl "${curl_options[@]}" \
-  -H "Authorization: Bearer $ops_token" \
+  -H "Authorization: Bearer $metrics_token" \
   "$base_url/api/v1/metrics")"
 
 python3 -c '
