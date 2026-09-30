@@ -33,7 +33,7 @@ dependencies:
   crypto: ^3.0.7
   rhttp:
     path: packages/rhttp
-  xml: ^7.0.1
+  xml: ^7.1.0
   share_plus: ^13.3.0
   dynamic_color: ^2.1.0
   material_ui: ^1.2.0
