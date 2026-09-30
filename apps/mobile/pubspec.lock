@@ -136,14 +136,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.2"
-  cnativeapi:
-    dependency: transitive
-    description:
-      name: cnativeapi
-      sha256: "43fce94bdf2f60e15bb7b0ef7b78b60fc0758e5463817fa17c5fb59f149566dd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0"
   code_assets:
     dependency: transitive
     description:
@@ -418,10 +410,10 @@ packages:
     dependency: transitive
     description:
       name: hooks
-      sha256: eaac480a35ec0814146c2c48d96aaa829e0e44a7662c88ae84c9edf4bc35651f
+      sha256: "9a62a50b50b769a737bc0a8ff381f333529df3ab746b2f6b02e83760231455ba"
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.0"
+    version: "2.0.2"
   hotkey_manager:
     dependency: "direct main"
     description:
@@ -503,10 +495,10 @@ packages:
     dependency: "direct main"
     description:
       name: intl
-      sha256: "1ca20c894b1717686a2319b8548763d812bc0aabdac580420a44c5178c57a867"
+      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
       url: "https://pub.dev"
     source: hosted
-    version: "0.20.3"
+    version: "0.20.2"
   js:
     dependency: transitive
     description:
@@ -599,10 +591,10 @@ packages:
     dependency: transitive
     description:
       name: matcher
-      sha256: "31bd099b47c10cd1aeb55146a2d46ce0277630ecef3f7dae54ad7873f36696cd"
+      sha256: dc0b7dc7651697ea4ff3e69ef44b0407ea32c487a39fff6a4004fa585e901861
       url: "https://pub.dev"
     source: hosted
-    version: "0.12.20"
+    version: "0.12.19"
   material_color_utilities:
     dependency: transitive
     description:
@@ -615,10 +607,10 @@ packages:
     dependency: "direct main"
     description:
       name: material_ui
-      sha256: "134ab2f0843545c4e661e4ba2753fe1bcf0753cb690d5a9ee4870638a40411e9"
+      sha256: fbfb53cab6c4629438feeade5f3d305f72944bc9d9f25786b19106d32b80ec45
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.2.0"
   media_kit:
     dependency: "direct main"
     description:
@@ -683,14 +675,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
+  menu_base:
+    dependency: transitive
+    description:
+      name: menu_base
+      sha256: "820368014a171bd1241030278e6c2617354f492f5c703d7b7d4570a6b8b84405"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.1"
   meta:
     dependency: transitive
     description:
       name: meta
-      sha256: "307249ce4ff29d58a18e97f6345f539382eb9c9c29ecda628900f31de0443dd9"
+      sha256: "1741988757a65eb6b36abe716829688cf01910bbf91c34354ff7ec1c3de2b349"
       url: "https://pub.dev"
     source: hosted
-    version: "1.19.0"
+    version: "1.18.0"
   mime:
     dependency: transitive
     description:
@@ -707,14 +707,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.19.2"
-  nativeapi:
-    dependency: transitive
-    description:
-      name: nativeapi
-      sha256: "2f40b3ac356097f56efa8188703159c303ce2b8b078d04c3d2d4afbe95b384ce"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0"
   nested:
     dependency: transitive
     description:
@@ -863,10 +855,10 @@ packages:
     dependency: transitive
     description:
       name: record_use
-      sha256: "1cb8564af8d43b464294411db9217f5ec04891c6f22ee2c32d73ae05e88a6bd2"
+      sha256: "2551bd8eecfe95d14ae75f6021ad0248be5c27f138c2ec12fcb52b500b3ba1ed"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.1"
+    version: "0.6.0"
   rhttp:
     dependency: "direct main"
     description:
@@ -1002,6 +994,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.1"
+  shortid:
+    dependency: transitive
+    description:
+      name: shortid
+      sha256: d0b40e3dbb50497dad107e19c54ca7de0d1a274eb9b4404991e443dadb9ebedb
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -1067,10 +1067,10 @@ packages:
     dependency: "direct main"
     description:
       name: sqlite3
-      sha256: fa3fd961e83b2dca8890a7b1014ab1226831d2b5908067c0ab7f385ffb655caf
+      sha256: "4c7fe79840389aaeaf05fd093f795b631b5a98e2bd28d54e555c100f4a9c7a1c"
       url: "https://pub.dev"
     source: hosted
-    version: "3.6.0"
+    version: "3.5.2"
   stack_trace:
     dependency: transitive
     description:
@@ -1123,18 +1123,18 @@ packages:
     dependency: transitive
     description:
       name: test_api
-      sha256: "2a122cbe059f8b610d3a5415f42e255b6c17b1f21eee1d960f31080237fb4f11"
+      sha256: "949a932224383300f01be9221c39180316445ecb8e7547f70a41a35bf421fb9e"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.12"
+    version: "0.7.11"
   tray_manager:
     dependency: "direct main"
     description:
       name: tray_manager
-      sha256: "1f504e8e858cf44af1f5147df05d68ef735902d3259eac69aafc8afd8ee38a0e"
+      sha256: "1a659b08baa6e9b91ef8ce16eda37740de398be1c4cf322b8a1ddfef25c68c5a"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.0"
+    version: "0.5.3"
   typed_data:
     dependency: transitive
     description:
@@ -1243,10 +1243,10 @@ packages:
     dependency: transitive
     description:
       name: vector_math
-      sha256: "92b9910f66ed1057fd4da7b040ae7c74cafacf885bdc81be496928d5049b032d"
+      sha256: d530bd74fea330e6e364cda7a85019c434070188383e1cd8d9777ee586914c5b
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.3"
+    version: "2.2.0"
   vm_service:
     dependency: transitive
     description:
