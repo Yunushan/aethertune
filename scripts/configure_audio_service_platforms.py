@@ -44,6 +44,17 @@ MACOS_USER_SELECTED_FILES_ENTITLEMENT = (
 )
 DEEP_LINK_SCHEME = "aethertune"
 DEEP_LINK_URL_NAME = "dev.aethertune.aethertune"
+# audio_service 0.18.19 resolves these default MediaControl icons through
+# Resources.getIdentifier. R8 cannot infer references across Dart/native calls.
+ANDROID_AUDIO_SERVICE_DRAWABLES = (
+    "audio_service_stop",
+    "audio_service_pause",
+    "audio_service_play_arrow",
+    "audio_service_skip_next",
+    "audio_service_skip_previous",
+    "audio_service_fast_forward",
+    "audio_service_fast_rewind",
+)
 
 _WIDGET_INFO_XML = """<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <appwidget-provider xmlns:android=\"http://schemas.android.com/apk/res/android\"
@@ -2091,6 +2102,48 @@ def _shortcut_paths(manifest_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     )
 
 
+def _audio_service_keep_path(manifest_path: Path) -> Path:
+    return (
+        manifest_path.parents[2]
+        / "src/main/res/raw/aethertune_audio_service_keep.xml"
+    )
+
+
+def _write_android_audio_service_keep(manifest_path: Path) -> None:
+    # A unique file preserves any existing app/library resource rules.
+    path = _audio_service_keep_path(manifest_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    root = ET.Element(
+        "resources",
+        {
+            f"{TOOLS}keep": ",".join(
+                f"@drawable/{name}" for name in ANDROID_AUDIO_SERVICE_DRAWABLES
+            ),
+        },
+    )
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="    ")
+    tree.write(path, encoding="utf-8", xml_declaration=True)
+
+
+def _verify_android_audio_service_keep(manifest_path: Path) -> None:
+    path = _audio_service_keep_path(manifest_path)
+    if not path.is_file():
+        raise RuntimeError("Android audio_service resource keep file is missing")
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as error:
+        raise RuntimeError("Android audio_service resource keep file is invalid") from error
+    required = {f"@drawable/{name}" for name in ANDROID_AUDIO_SERVICE_DRAWABLES}
+    kept = {name.strip() for name in root.get(f"{TOOLS}keep", "").split(",")}
+    if (
+        root.tag != "resources"
+        or not required.issubset(kept)
+        or root.get(f"{TOOLS}discard") is not None
+    ):
+        raise RuntimeError("Android audio_service icons must be kept for release controls")
+
+
 def _write_android_playback_widget(manifest_path: Path) -> None:
     widget_info, widget_layout, widget_source, activity_source = _widget_paths(
         manifest_path
@@ -2216,6 +2269,7 @@ def configure_android(manifest_path: Path, gradle_path: Path) -> None:
         }
     )
     _write_android_playback_widget(manifest_path)
+    _write_android_audio_service_keep(manifest_path)
 
     ET.indent(tree, space="    ")
     tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
@@ -2697,6 +2751,7 @@ def configure_ios_code_sign_entitlements(project_path: Path) -> None:
 
 
 def verify_android(manifest_path: Path, gradle_path: Path) -> None:
+    _verify_android_audio_service_keep(manifest_path)
     gradle = gradle_path.read_text(encoding="utf-8")
     expected_compile_sdk = (
         "compileSdk = "

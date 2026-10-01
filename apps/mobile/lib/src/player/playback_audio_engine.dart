@@ -466,10 +466,20 @@ class JustAudioPlaybackEngine
   }
 
   @override
-  Future<void> play() {
+  Future<void> play() async {
+    final duration = _player.duration;
+    // Completion can be followed by the controller stopping the exhausted
+    // queue, leaving an idle backend at the known end of the last track.
+    if (_player.processingState == ProcessingState.completed ||
+        (duration != null &&
+            duration > Duration.zero &&
+            _player.position >= duration)) {
+      await seek(Duration.zero);
+    }
+    // just_audio's play future completes when playback stops, so this command
+    // awaits only the rewind rather than the length of the track.
     unawaited(_player.play());
     _scheduleCrossfade();
-    return Future<void>.value();
   }
 
   @override
