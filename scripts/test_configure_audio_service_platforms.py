@@ -570,5 +570,91 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE prev,
             )
 
 
+class AndroidMediaIconRetentionTest(unittest.TestCase):
+    ICONS = {
+        "audio_service_stop",
+        "audio_service_pause",
+        "audio_service_play_arrow",
+        "audio_service_skip_next",
+        "audio_service_skip_previous",
+        "audio_service_fast_forward",
+        "audio_service_fast_rewind",
+    }
+
+    def create_wrapper(self, root: Path) -> tuple[Path, Path]:
+        manifest = root / "android/app/src/main/AndroidManifest.xml"
+        gradle = root / "android/app/build.gradle.kts"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(
+            '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+            '<application><activity android:name=".MainActivity" /></application>'
+            '</manifest>', encoding="utf-8",
+        )
+        gradle.write_text(
+            'android {\n'
+            '    compileSdk = flutter.compileSdkVersion\n'
+            '    defaultConfig {\n'
+            '        applicationId = "com.example.example"\n'
+            '        minSdk = flutter.minSdkVersion\n'
+            '    }\n'
+            '    buildTypes {\n'
+            '        release {\n'
+            '            signingConfig = signingConfigs.getByName("debug")\n'
+            '        }\n'
+            '    }\n'
+            '}\n', encoding="utf-8",
+        )
+        return manifest, gradle
+
+    def test_keeps_dynamic_plugin_icons_and_preserves_other_resource_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest, gradle = self.create_wrapper(Path(directory))
+            raw = manifest.parent / "res/raw"
+            raw.mkdir(parents=True)
+            custom = raw / "keep.xml"
+            original = (
+                '<resources xmlns:tools="http://schemas.android.com/tools" '
+                'tools:keep="@drawable/owner_icon" />\n'
+            ).encode()
+            custom.write_bytes(original)
+
+            platform_config.configure_android(manifest, gradle)
+
+            rule = raw / "aethertune_audio_service_keep.xml"
+            self.assertTrue(rule.is_file(), "Dynamic media icons need an explicit release keep rule")
+            root = ET.parse(rule).getroot()
+            kept = set(root.get(f"{platform_config.TOOLS}keep", "").split(","))
+            self.assertEqual(kept, {f"@drawable/{name}" for name in self.ICONS})
+            self.assertIsNone(root.get(f"{platform_config.TOOLS}discard"))
+            self.assertEqual(custom.read_bytes(), original)
+            self.assertNotIn("isShrinkResources = false", gradle.read_text(encoding="utf-8"))
+            self.assertNotIn("isMinifyEnabled = false", gradle.read_text(encoding="utf-8"))
+            first = rule.read_bytes()
+            platform_config.configure_android(manifest, gradle)
+            self.assertEqual(rule.read_bytes(), first)
+            self.assertEqual(custom.read_bytes(), original)
+            platform_config.verify_android(manifest, gradle)
+
+    def test_verifier_rejects_missing_stop_icon_and_discard_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest, gradle = self.create_wrapper(Path(directory))
+            platform_config.configure_android(manifest, gradle)
+            rule = manifest.parent / "res/raw/aethertune_audio_service_keep.xml"
+            rule.parent.mkdir(parents=True, exist_ok=True)
+            kept = ",".join(f"@drawable/{name}" for name in sorted(self.ICONS))
+            for mutation in (None, kept.replace("@drawable/audio_service_stop", "@drawable/unrelated"), kept):
+                with self.subTest(mutation=mutation):
+                    if mutation is None:
+                        rule.unlink(missing_ok=True)
+                    else:
+                        discard = ' tools:discard="@drawable/audio_service_*"' if mutation == kept else ""
+                        rule.write_text(
+                            '<resources xmlns:tools="http://schemas.android.com/tools" '
+                            f'tools:keep="{mutation}"{discard} />', encoding="utf-8",
+                        )
+                    with self.assertRaisesRegex(RuntimeError, "audio_service"):
+                        platform_config.verify_android(manifest, gradle)
+
+
 if __name__ == "__main__":
     unittest.main()
