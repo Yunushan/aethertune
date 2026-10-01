@@ -8,6 +8,11 @@ if [[ -z "$metrics_token" ]]; then
   exit 2
 fi
 
+if [[ "$metrics_token" == *$'\r'* || "$metrics_token" == *$'\n'* ]]; then
+  echo 'Metrics probe token must not contain carriage returns or newlines.' >&2
+  exit 2
+fi
+
 case "$base_url" in
   https://*|http://127.0.0.1:*|http://localhost:*) ;;
   *)
@@ -46,9 +51,10 @@ health_body="$(curl "${curl_options[@]}" "$base_url/health")"
 validate_status_response /health ok "$health_body"
 ready_body="$(curl "${curl_options[@]}" "$base_url/ready")"
 validate_status_response /ready ready "$ready_body"
-metrics_body="$(curl "${curl_options[@]}" \
-  -H "Authorization: Bearer $metrics_token" \
-  "$base_url/api/v1/metrics")"
+# Read the header from stdin so the raw token is absent from curl's arguments.
+metrics_body="$(printf 'Authorization: Bearer %s\n' "$metrics_token" |
+  curl "${curl_options[@]}" --header @- \
+    "$base_url/api/v1/metrics")"
 
 python3 -c '
 import json
