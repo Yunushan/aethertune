@@ -61,11 +61,22 @@ SHA-256 and Google CMake repository XML checksum/size; the CMake ZIP passed
 validation of all 2,990 entries. No tracked pin defect was established. The bad
 runner payloads were not retained, so their exact cause is unproven. One bounded
 retry of the failed jobs was initiated on the same run and exact revision, with
-all integrity checks retained. Its result requires independent verification.
+all integrity checks retained. Attempt 2 succeeded on the same exact revision.
 
-Earlier successful bundles cover earlier revisions. They do not establish
-release assembly, checksums, manifest, or attestations for this exact main.
-Any subsequent source correction requires its own relevant acceptance.
+Independent verification of attempt 2 passed: 19 files, 17 manifest artifacts,
+18 checksum entries, three deterministic SBOMs, and exact committed lockfile
+comparisons. Bundle artifact `11180522356` has size 432,690,478 bytes and digest
+`sha256:6a1270f6cdb0d97b20ea118e36bc2cf334f36241d5a856f9056ea41c146fb9ef`.
+The APK SHA-256 is
+`d97b57bb6508e0742e735f87f768776b12773b42472464d150075201a55592cd`; the manifest
+SHA-256 is `81f3465596fbff66939ba7bd1c86d48f1c9c12531412d2f8f7d4b10a435399cc`.
+APK and manifest attestations verified against the exact release workflow on
+`refs/heads/main`, with both signer and source digest equal to `5b3e5fb2`.
+Both attestation statements match all 18 locally verified checksum subjects and
+identify this run's second attempt. Ten successful jobs were inherited from
+attempt 1; Android, Linux, and assembly executed on attempt 2. Production signing
+and publication remained skipped. This is a verified nonpublishing bundle for
+main `5b3e5fb2`; subsequent source corrections need their own relevant acceptance.
 
 ## Operations probe correction prepared for review
 
@@ -81,9 +92,101 @@ curl arguments and probe output. All three new behavioral methods ran locally
 without skips. The combined probe and operations-workflow suites discovered 17
 tests: 15 passed and two existing POSIX-only cases skipped on Windows. The new
 behavioral tests reproduced the original defect before the correction. Bash
-syntax and diff checks passed. Existing Ubuntu CI registration and its
-compiled-server probe still require acceptance at the committed revision.
-This prepared correction is not credited as deployed operations evidence.
+syntax and diff checks passed.
+
+[Draft PR #53](https://github.com/Yunushan/aethertune/pull/53) carries this correction.
+At head `eebb94c3262603452a4ebdcfb481aff971c289ad`, the
+[Ubuntu server job](https://github.com/Yunushan/aethertune/actions/runs/36899148858/job/110493626128)
+passed all nine probe contract tests without skips, strict analysis, 117 Dart
+tests, and authenticated probes against both the compiled server and container.
+Native compile, systemd verification, load/restart, and recovery gates also
+passed. Final-head required checks still gate integration. These controlled
+fixture results do not establish deployed operations acceptance.
+
+## Ordinary Android candidate acceptance
+
+An owned API 35 x86_64 emulator exercised the ordinary release APK from verified
+run `36894678686`, without instrumenting or rebuilding the application. The
+fixture-signed derivative had SHA-256
+`01fb85e6c77d22f89d12b5348ca42e2395097071fabf7289ac78bafad29d6cd5`; all 324
+non-signature payload entries matched the attested original APK. This is fixture
+signing, not production signing.
+
+The retained local `build/readiness-2026-10-01/android/result.json` reports 25
+scoped checks passed, including provenance, clean installation, onboarding,
+synthetic WAV import/playback/pause/seek, favorite/offline/volume/queue persistence
+across fresh application processes (`2758` then `5867`), uninstall, and cleanup.
+The fixture ran through the ordinary UI. Unloaded `0:00 of 0:00` after reopening
+does not establish cursor restoration.
+
+Two findings prevent full Android playback/system-media acceptance:
+
+- Play at the completed 20-second track did not rewind. Explicit seek to the
+  start followed by Play worked; replay after completion is not passed.
+- Native logs repeatedly reported `You must specify an icon resource id to build
+  a CustomAction` while audio_service published playback state. Metadata and
+  queue existed, but the observed system media session was inactive/NONE after
+  completion. System-media controls are not passed.
+
+These findings require source correction and execution of a new exact-source
+release APK with resource shrinking retained. The application was uninstalled;
+owned emulator/ADB processes and ports were closed and fixture private keys
+removed. This run does not establish physical audio, production signing,
+versioned upgrade/rollback, or broader lifecycle/accessibility acceptance.
+
+[Draft PR #54](https://github.com/Yunushan/aethertune/pull/54) carries a prepared
+correction at `1584b7fb9091be08bb94d49a7eff850084016760`. Exact-source
+[candidate run 36906007502](https://github.com/Yunushan/aethertune/actions/runs/36906007502)
+targets that head. Replay and system-media runtime acceptance still require
+the fresh candidate; both original findings and unproven cursor restoration
+remain recorded. Local source tests do not establish that acceptance.
+
+## Ordinary Windows candidate acceptance
+
+An owned, marked Windows Sandbox guest exercised the ordinary MSIX from
+verified release run `36894678686`, attempt 2, artifact `11180522356`, on exact
+source `5b3e5fb2ee502bf9eddd6618b72303dc2939e573`. The original MSIX SHA-256 is
+`b341de7563c7798fcf321ce1910625fa13554291d972e5e056a7521db7eb1473`.
+Identity remained `AetherTune`, publisher `CN=AetherTune`, version `0.1.0.0`,
+architecture `x64`. Certificate creation, test signing, and test trust occurred
+only inside the guest; the private key was not exported.
+
+The fixture-signed derivative had SHA-256
+`47fa8b4d6875f6e132a4e57f197e73d094e727aba575d4aaae95c7a632cdd049`.
+Guest checks and an independent host ZIP comparison preserved 54 of the 55
+original entries byte for byte, including the manifest, block map, and every
+application payload entry. The only changed original entry was
+`[Content_Types].xml`, which gained only the two signature metadata declarations.
+Only `AppxSignature.p7x` and `AppxMetadata/CodeIntegrity.cat` were added; both
+signatures verified with the same disposable guest certificate. No application
+was rebuilt or instrumented, and no version or publisher identity changed.
+
+The guest lifecycle passed clean installation, installed AUMID activation,
+15 seconds of continuous window survival, graceful application close, and
+uninstall of exact package `AetherTune_0.1.0.0_x64__78pqjtf8hq8py`.
+The installed ordinary EXE SHA-256 matched the original bundle:
+`c959822a9acc34430a45616aa933b8134abc7a77168b237a21166451f750680c`.
+The retained screenshot was reviewed and shows normal "Welcome to AetherTune"
+onboarding. Package registration, application processes, install directory,
+package app data, and legacy protocol registration were all absent after
+uninstall; guest certificate cleanup reported no failures.
+
+The raw host coordinator remains **failed**: its disconnected modern Sandbox
+UI did not exit within 45 seconds after the guest finished. The official CLI
+stopped exact owned session `dc98548b-0605-4273-b2db-e10d55dc114d` with exit 0 and
+confirmed it absent. Only the recorded owned UI process was then force-stopped,
+with its path and start time checked. Final read-only inspection found all
+recorded helper/UI processes absent, no Sandbox session/VM processes, and an
+empty official session inventory. Automatic Sandbox UI shutdown is not passed.
+
+The retained local
+`build/readiness-2026-10-01/windows-install/verification-summary.json` preserves
+the guest pass, raw host failure, earlier pre-install fixture failures, payload
+comparison, screenshot, and final cleanup observations. Host trust/settings
+were unchanged. This proves only the stated ordinary lifecycle under guest
+test trust; it does not establish production signing, SmartScreen or Store
+trust, versioned upgrade/rollback, accessibility, physical audio, or deployed
+service acceptance.
 
 ## External state observed on October 1
 
@@ -109,9 +212,8 @@ completed, non-skipped execution. Production and monitoring deployment inventori
 were empty, and no configured public service endpoint was discoverable. These
 results do not establish deployed health or receiver-confirmed notification delivery.
 
-No connected physical Android or Apple device was available. An owned Android
-emulator can support bounded candidate acceptance once a verified APK exists.
-Emulator preparation is not installation or physical audio evidence. Existing
+No connected physical Android or Apple device was available. The owned emulator
+acceptance above covers only its stated checks and retains its two findings. Existing
 candidate package versions are Android `0.1.0`/code `1` and Windows `0.1.0.0`;
 same-version replacement cannot prove a versioned upgrade or rollback.
 
