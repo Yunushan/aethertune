@@ -1,4 +1,8 @@
-# Production Readiness Evidence: 2026-09-30
+# Production Readiness Evidence: Historical Checkpoint (2026-09-30)
+
+The [October 1 checkpoint](PRODUCTION_READINESS_EVIDENCE_2026-10-01.md) records
+the subsequent merges, final hosted acceptance, and current release failures.
+This document preserves the earlier observations at their named revisions.
 
 **100/100 remains unproven; broad production release is not approved.** The last
 weighted assessment was the historical **81/100** recorded on 2026-09-24 for
