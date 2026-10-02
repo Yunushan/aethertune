@@ -176,7 +176,9 @@ func matches(_ app: NSRunningApplication, receipt: [String: Any]) throws -> Bool
 }
 
 func stopOwned(_ receipt: [String: Any], permitForcedCleanup: Bool) throws -> [String: Any] {
-    guard let pid = receipt["pid"] as? Int, pid > 0 else { throw ObservationError("Missing owned PID.") }
+    guard let receiptPID = receipt["pid"] as? Int, let pid = pid_t(exactly: receiptPID), pid > 0 else {
+        throw ObservationError("Missing or out-of-range owned PID.")
+    }
     guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else {
         return ["ownedProcessAbsent": true, "alreadyAbsent": true]
     }
