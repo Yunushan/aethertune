@@ -85,6 +85,9 @@ jobs:
       - name: Test macOS release artifact verifier
         run: python3 scripts/ci/test_verify_macos_release_artifacts.py
 
+      - name: Test macOS packaged acceptance ownership and provenance guards
+        run: python3 scripts/ci/test_macos_packaged_acceptance.py
+
       - name: Test Windows release artifact verifier
         run: python3 scripts/ci/test_verify_windows_release_artifacts.py
 
