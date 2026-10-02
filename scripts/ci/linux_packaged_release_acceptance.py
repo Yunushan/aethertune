@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes as C
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -311,6 +312,7 @@ def installed_processes():
 class OwnedProcess:
     def __init__(self, command, env, log, **options):
         self.command = command
+        self.started_utc = datetime.now(timezone.utc).isoformat()
         self.handle = subprocess.Popen(command, env=env, stdout=options.pop("stdout", log), stderr=log, **options)
         self.identity = process_identity(self.handle.pid)
         require(self.identity is not None, f"Process exited before ownership capture: {command}")
@@ -328,6 +330,55 @@ class OwnedProcess:
             self.handle.kill()
             self.handle.wait(timeout=5)
             return "killed"
+
+
+def failure_exit_diagnostics(app):
+    """Read metadata for the owned process only; never enable or export core dumps."""
+    result = {"core_payload_collected": False}
+    if sys.platform != "linux":
+        return dict(result, status="unavailable outside Linux")
+    try:
+        import resource
+        result["core_size_limit"] = list(resource.getrlimit(resource.RLIMIT_CORE))
+        result["kernel_core_pattern"] = Path("/proc/sys/kernel/core_pattern").read_text()[:1024].strip()
+    except (OSError, ImportError) as error:
+        result["core_policy_metadata_error"] = str(error)
+    if not shutil.which("coredumpctl"):
+        return dict(result, coredumpctl="not installed; core absence not inferred")
+    command = ["coredumpctl", "--no-pager", "--since", app.started_utc,
+               "--until", datetime.now(timezone.utc).isoformat(), "info", str(app.handle.pid)]
+    try:
+        captured = run(command, check=False, timeout=5)
+        result["coredumpctl"] = {"command": command, "exit_code": captured.returncode,
+                                 "stdout": captured.stdout[:8192], "stderr": captured.stderr[:2048],
+                                 "scope": "owned PID and launch/exit time interval; metadata only"}
+    except (OSError, subprocess.TimeoutExpired) as error:
+        result["coredumpctl"] = {"command": command, "error": str(error)}
+    return result
+
+
+def wait_for_ordinary_exit(app, report, evidence, diagnostics=failure_exit_diagnostics):
+    outcome = {"identity": app.identity, "started_utc": app.started_utc,
+               "wm_delete_sent": True, "wait_timeout_seconds": 15}
+    report["application_exit"] = outcome
+    try:
+        code = app.handle.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        outcome.update(returncode=None, timed_out=True)
+        write_json(evidence / "application-exit.json", outcome)
+        raise RuntimeError("Ordinary app did not exit within 15 seconds after WM_DELETE_WINDOW")
+    outcome.update(returncode=code, timed_out=False)
+    if code < 0:
+        outcome["signal_number"] = -code
+        try:
+            outcome["signal_name"] = signal.Signals(-code).name
+        except ValueError:
+            outcome["signal_name"] = "unknown"
+    if code != 0:
+        outcome["failure_diagnostics"] = diagnostics(app)
+    # Persist before asserting, so the real native result survives cleanup.
+    write_json(evidence / "application-exit.json", outcome)
+    require(code == 0, f"Ordinary app did not exit successfully after WM_DELETE_WINDOW: returncode={code}, signal={outcome.get('signal_name')}")
 
 
 def read_pipe_line(pipe, timeout=10):
@@ -607,7 +658,7 @@ def acceptance(args):
             logs.append(log)
             process = OwnedProcess(command, env, log, **options)
             owned.append(process)
-            report["processes"].append({"name": name, "argv": command, **process.identity})
+            report["processes"].append({"name": name, "argv": command, "started_utc": process.started_utc, **process.identity})
             write_json(evidence / "result.json", report)
             return process
         authority = fixture / "Xauthority"
@@ -662,7 +713,7 @@ def acceptance(args):
         observer = start("observer", [sys.executable, str(Path(__file__).resolve()), "--observe", str(app.handle.pid),
                                      "--identity", json.dumps(app.identity), "--evidence", str(evidence)])
         require(observer.handle.wait(timeout=55) == 0, "Ordinary window acceptance failed; see observer.log")
-        require(app.handle.wait(timeout=15) == 0, "Ordinary app did not exit successfully after WM_DELETE_WINDOW")
+        wait_for_ordinary_exit(app, report, evidence)
         require(all(process.handle.poll() is None for process in (xvfb, dbus, keyring, pulse)),
                 "A private desktop service exited during ordinary app observation")
         report["ordinary_window_and_graceful_exit"] = True

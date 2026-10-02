@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 import linux_packaged_release_acceptance as gate
@@ -182,6 +184,39 @@ Description: Free and open-source local-first music player
         for name in ("DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "PULSE_SERVER", "WAYLAND_DISPLAY"):
             self.assertNotIn(name, child)
         self.assertEqual(child["PATH"], "/bin")
+
+    def test_real_nonzero_exit_is_retained_and_fails_the_gate(self):
+        handle = subprocess.Popen([sys.executable, "-c", "raise SystemExit(7)"])
+        app = SimpleNamespace(handle=handle, started_utc="2026-10-02T00:00:00+00:00",
+                              identity={"pid": handle.pid, "exe": sys.executable, "start_ticks": 1})
+        report = {}
+        with self.assertRaisesRegex(RuntimeError, "returncode=7"):
+            gate.wait_for_ordinary_exit(app, report, self.root, lambda process: {"core_payload_collected": False})
+        retained = json.loads((self.root / "application-exit.json").read_text())
+        self.assertEqual(retained["returncode"], 7)
+        self.assertEqual(retained["identity"], app.identity)
+        self.assertEqual(retained, report["application_exit"])
+        self.assertFalse(retained["failure_diagnostics"]["core_payload_collected"])
+
+    def test_native_signal_is_retained_without_accepting_it(self):
+        app = SimpleNamespace(handle=SimpleNamespace(pid=12345, wait=lambda timeout: -11),
+                              started_utc="2026-10-02T00:00:00+00:00",
+                              identity={"pid": 12345, "exe": "/opt/aethertune/aethertune", "start_ticks": 1})
+        report = {}
+        with self.assertRaisesRegex(RuntimeError, "signal=SIGSEGV"):
+            gate.wait_for_ordinary_exit(app, report, self.root, lambda process: {"availability": "not installed"})
+        retained = json.loads((self.root / "application-exit.json").read_text())
+        self.assertEqual((retained["returncode"], retained["signal_number"], retained["signal_name"]),
+                         (-11, 11, "SIGSEGV"))
+
+    def test_zero_exit_is_retained_as_the_only_success(self):
+        handle = subprocess.Popen([sys.executable, "-c", "raise SystemExit(0)"])
+        app = SimpleNamespace(handle=handle, started_utc="2026-10-02T00:00:00+00:00",
+                              identity={"pid": handle.pid, "exe": sys.executable, "start_ticks": 1})
+        report = {}
+        gate.wait_for_ordinary_exit(app, report, self.root)
+        self.assertEqual(report["application_exit"]["returncode"], 0)
+        self.assertNotIn("failure_diagnostics", report["application_exit"])
 
     def test_pid_reuse_guard_refuses_then_cleans_only_its_owned_child(self):
         # A real disposable child proves the refusal sends no signal. The identity
