@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import os
 from pathlib import Path
 import stat
@@ -247,10 +248,41 @@ class AcceptanceGuardsTest(unittest.TestCase):
         self.assertTrue((evidence / "launch-diagnostics.json").is_file())
         self.assertNotIn("status", result)
 
+    def test_native_environment_excludes_authentication_and_keeps_hosted_guard(self) -> None:
+        safe = {"HOME": "/Users/runner", "PATH": "/usr/bin", "TMPDIR": "/tmp/owned", "RUNNER_TEMP": "/tmp/runner",
+                "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "RUNNER_OS": "macOS",
+                "GITHUB_REPOSITORY": harness.REPO, "GITHUB_EVENT_NAME": "pull_request", "DISPLAY": "fixture-display"}
+        auth = {key: "fixture-authentication" for key in ["GH_TOKEN", "GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN",
+                "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "ACTIONS_RUNTIME_URL", "CUSTOM_AUTH_TOKEN", "CANDIDATE_SOURCE"]}
+        result = harness.observer_environment({**safe, **auth})
+        self.assertEqual(result, safe)
+        harness.require_host("darwin", result)
+        with self.assertRaises(ValueError):
+            harness.observer_environment({key: value for key, value in safe.items() if key != "HOME"})
+
+    def test_uploaded_launch_log_drops_entire_environment_payload_records(self) -> None:
+        raw = self.root / "launch.raw"
+        uploaded = self.root / "launch.json"
+        expected = {"eventMessage": "Exact owned app: AMFI restricted entitlements", "processID": 123}
+        raw.write_text(json.dumps([expected,
+            {"eventMessage": "job failed: EnvironmentVariables => { fixture-secret }"},
+            {"nested": {"environmentVariables": {"credential": "fixture-secret"}}}]), encoding="utf-8")
+        receipt = harness.sanitize_launch_log(raw, uploaded)
+        self.assertEqual(json.loads(uploaded.read_text()), [expected])
+        self.assertNotIn("fixture-secret", uploaded.read_text())
+        self.assertEqual(receipt["environmentPayloadRecordsDropped"], 2)
+        self.assertFalse(receipt["rawUploaded"])
+        self.assertEqual(receipt["rawSha256"], harness.digest(raw))
+        raw.write_text("incomplete JSON", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            harness.sanitize_launch_log(raw, self.root / "unparseable.json")
+        self.assertFalse((self.root / "unparseable.json").exists())
+
     def test_scoped_workflow_permissions_fixed_pr_target_and_input_transport(self) -> None:
         workflow = (harness.ROOT / ".github/workflows/macos-packaged-acceptance.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("pull_request:", workflow)
+        self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", workflow)
         self.assertIn("branches: [main]", workflow)
         for trigger in ["push:", "schedule:", "pull_request_target:"]:
             self.assertNotIn(trigger, workflow)
@@ -269,9 +301,27 @@ class AcceptanceGuardsTest(unittest.TestCase):
             "scripts/ci/test_macos_packaged_acceptance.py",
         })
         self.assertIn("github.event.pull_request.head.repo.full_name == github.repository", workflow)
+        self.assertIn("if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository)", workflow)
         for key, value in [("candidate_run", harness.DEFAULT_RUN), ("candidate_source", harness.DEFAULT_SOURCE),
                            ("candidate_ref", harness.DEFAULT_REF), ("candidate_attempt", str(harness.DEFAULT_ATTEMPT))]:
             self.assertIn(f"github.event_name == 'workflow_dispatch' && inputs.{key} || '{value}'", workflow)
+
+    def test_partial_evidence_upload_retains_entitlements_and_only_scoped_crashes(self) -> None:
+        workflow = (harness.ROOT / ".github/workflows/macos-packaged-acceptance.yml").read_text(encoding="utf-8")
+        patterns = [line.strip() for line in workflow.split("          path: |\n", 1)[1].splitlines() if line.strip()]
+        base = "build/macos-packaged-acceptance/"
+        expected = {base + name for name in ["result.json", "observer-stderr.log", "ordinary-window.png",
+                    "codesign-entitlements-arm64.xml", "codesign-entitlements-x86_64.xml",
+                    "crash-reports/01-aethertune.ips", "crash-reports/02-aethertune.crash"]}
+        excluded = {base + name for name in ["bundle.zip", "fixture-key.p12", "launch-system-log.raw", "other.ips",
+                    "other-directory/other.crash", "crash-reports/unrelated.txt"]}
+        for name in expected | excluded:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture", encoding="utf-8")
+        selected = {path.relative_to(self.root).as_posix() for pattern in patterns
+                    for path in self.root.glob(pattern) if path.is_file()}
+        self.assertEqual(selected, expected)
 
 
 if __name__ == "__main__":

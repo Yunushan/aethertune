@@ -217,6 +217,36 @@ def launch_log_arguments(app: Path, started: float, ended: float) -> list[str]:
             "--start", start, "--end", end, "--predicate", f"({predicate})"]
 
 
+def observer_environment(env: dict[str, str]) -> dict[str, str]:
+    # gh retains its authenticated coordinator environment. Native observation
+    # receives only paths/session identity and the existing hosted-scope guard.
+    required = {"HOME", "PATH", "TMPDIR", "RUNNER_TEMP", "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT",
+                "RUNNER_OS", "GITHUB_REPOSITORY", "GITHUB_EVENT_NAME"}
+    require(all(env.get(key) for key in required), "Required native observer environment unavailable.")
+    allowed = required | {"USER", "LOGNAME", "DISPLAY", "__CF_USER_TEXT_ENCODING", "LANG", "LC_ALL"}
+    return {key: value for key, value in env.items() if key in allowed}
+
+
+def sanitize_launch_log(raw: Path, target: Path) -> dict:
+    require(raw.stat().st_size <= 8 * 1024 * 1024, "Scoped launch log exceeds 8 MiB.")
+    rows = json.loads(raw.read_text(encoding="utf-8"))
+    require(isinstance(rows, list) and all(isinstance(row, dict) for row in rows),
+            "Unexpected scoped unified log JSON framing.")
+    def includes_environment(value) -> bool:
+        if isinstance(value, str):
+            return "environmentvariables" in value.casefold()
+        if isinstance(value, dict):
+            return any(includes_environment(key) or includes_environment(item) for key, item in value.items())
+        if isinstance(value, list):
+            return any(includes_environment(item) for item in value)
+        return False
+    safe = [row for row in rows if not includes_environment(row)]
+    target.write_text(json.dumps(safe, indent=2) + "\n", encoding="utf-8")
+    return {"inputRecords": len(rows), "retainedRecords": len(safe),
+            "environmentPayloadRecordsDropped": len(rows) - len(safe),
+            "rawUploaded": False, "rawSha256": digest(raw)}
+
+
 def crash_snapshot(roots: list[Path]) -> dict[str, dict]:
     records: dict[str, dict] = {}
     for root in roots:
@@ -275,8 +305,10 @@ def launch_diagnostics(run: Commands, evidence: Path, app: Path, roots: list[Pat
     result = {"startedUnix": started, "endedUnix": ended, "errors": [], "crashReports": [],
               "scope": "Exact attempt interval and app path/bundle ID only; read-only diagnostics do not change failure status."}
     try:
+        raw = evidence / "launch-system-log.raw"
         run(launch_log_arguments(app, started, ended), timeout=30,
-            binary=evidence / "launch-system-log.json")
+            binary=raw)
+        result["logSanitization"] = sanitize_launch_log(raw, evidence / "launch-system-log.json")
     except Exception as error:
         result["errors"].append(f"Unified log collection: {error}")
     try:
@@ -294,18 +326,21 @@ class Commands:
         self.evidence, self.sequence = evidence, 0
         self.receipts: list[dict] = []
 
-    def __call__(self, args: list[str], *, timeout: int = 60, binary: Path | None = None) -> str:
+    def __call__(self, args: list[str], *, timeout: int = 60, binary: Path | None = None,
+                 environment: dict[str, str] | None = None) -> str:
         self.sequence += 1
         stem = f"{self.sequence:03d}-{Path(args[0]).name}"
         stdout = binary or self.evidence / f"{stem}.log"
         stderr = self.evidence / f"{stem}-stderr.log"
         receipt = {"arguments": args, "startedUnix": time.time(),
                    "stdout": str(stdout), "stderr": str(stderr)}
+        if environment is not None:
+            receipt["environmentPolicy"] = "minimal-native-observer; no authentication variables"
         self.receipts.append(receipt)
         write(self.evidence / "commands.json", {"commands": self.receipts})
         with stdout.open("wb") as out, stderr.open("wb") as err:
             child = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
-                                     start_new_session=True)
+                                     start_new_session=True, env=environment)
             receipt["pid"] = child.pid
             write(self.evidence / "commands.json", {"commands": self.receipts})
             try:
@@ -350,6 +385,7 @@ def execute(args: argparse.Namespace) -> int:
     run = Commands(evidence)
     stage: Path | None = None
     observer: Path | None = None
+    observer_env: dict[str, str] | None = None
     before: list[dict] | None = None
     paths: list[Path] = []
     try:
@@ -423,7 +459,8 @@ def execute(args: argparse.Namespace) -> int:
         require("com.apple.quarantine" not in xattrs, "Quarantined package requires external trust review; it will not be stripped.")
         observer = stage / "observer"
         run(["xcrun", "swiftc", str(ROOT / "scripts/ci/macos_packaged_observer.swift"), "-o", str(observer)], timeout=120)
-        snapshot = json.loads(run([str(observer), "snapshot"]))
+        observer_env = observer_environment(dict(os.environ))
+        snapshot = json.loads(run([str(observer), "snapshot"], environment=observer_env))
         write(evidence / "native-preflight.json", snapshot)
         require(snapshot["screenCaptureAllowed"] is True and snapshot["foundationHome"] == snapshot["passwdHome"], "Existing capture permission/actual Foundation home unavailable.")
         require(snapshot["runningAppCount"] == 0 and snapshot["keychainAppItemCount"] == 0,
@@ -438,7 +475,8 @@ def execute(args: argparse.Namespace) -> int:
         write(evidence / "crash-reports-before.json", crash_before)
         attempt_started = time.time()
         try:
-            run([str(observer), "run", str(app), str(evidence), digest(executable)], timeout=180)
+            run([str(observer), "run", str(app), str(evidence), digest(executable)], timeout=180,
+                environment=observer_env)
         except Exception:
             attempt_ended = time.time()
             try:
@@ -474,13 +512,14 @@ def execute(args: argparse.Namespace) -> int:
     finally:
         if observer is not None and (evidence / "launch-identity.json").exists():
             try:
-                run([str(observer), "cleanup", str(evidence / "launch-identity.json")], timeout=30)
+                run([str(observer), "cleanup", str(evidence / "launch-identity.json")], timeout=30,
+                    environment=observer_env)
             except Exception as error:
                 report["errors"].append(f"Owned process cleanup: {error}")
                 report["status"] = "failed"
         if before is not None:
             try:
-                final = json.loads(run([str(observer), "snapshot"]))
+                final = json.loads(run([str(observer), "snapshot"], environment=observer_env))
                 write(evidence / "native-after.json", final)
                 require(final["runningAppCount"] == 0 and final["keychainAppItemCount"] == 0,
                         "App or unexpected keychain state remains; no unrelated keychain item is deleted.")

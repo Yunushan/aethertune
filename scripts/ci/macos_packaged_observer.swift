@@ -247,6 +247,9 @@ func runApp(_ bundle: URL, evidence: URL, expectedHash: String) throws {
         configuration.addsToRecentItems = false
         configuration.promptsUserIfNeeded = false
         configuration.activates = true
+        let appEnvironmentKeys: Set<String> = ["HOME", "PATH", "TMPDIR", "RUNNER_TEMP", "USER", "LOGNAME",
+                                                "DISPLAY", "__CF_USER_TEXT_ENCODING", "LANG", "LC_ALL"]
+        configuration.environment = env.filter { appEnvironmentKeys.contains($0.key) }
         var completed = false
         var launchError: Error?
         NSWorkspace.shared.openApplication(at: bundle, configuration: configuration) { application, error in

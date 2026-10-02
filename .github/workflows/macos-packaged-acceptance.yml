@@ -2,6 +2,7 @@ name: macOS packaged acceptance
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
       - '.github/workflows/macos-packaged-acceptance.yml'
@@ -44,7 +45,7 @@ concurrency:
 jobs:
   ordinary-app:
     name: Ordinary universal package launch on arm64
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: macos-26
     timeout-minutes: 15
     steps:
@@ -81,3 +82,6 @@ jobs:
             build/macos-packaged-acceptance/*.json
             build/macos-packaged-acceptance/*.log
             build/macos-packaged-acceptance/*.png
+            build/macos-packaged-acceptance/*.xml
+            build/macos-packaged-acceptance/crash-reports/*.ips
+            build/macos-packaged-acceptance/crash-reports/*.crash
