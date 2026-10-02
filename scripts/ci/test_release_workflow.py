@@ -7,6 +7,9 @@ import re
 import unittest
 from pathlib import Path
 
+# Run payload/cleanup regressions in the existing hosted release-contract step.
+from test_linux_packaged_release_acceptance import PackagedReleaseTest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "aethertune-release.yml"
