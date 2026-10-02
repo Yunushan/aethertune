@@ -220,7 +220,9 @@ class _DesktopTrayControlsState extends State<DesktopTrayControls>
       case DesktopWindowCloseAction.hide:
         await windowManager.hide();
       case DesktopWindowCloseAction.quit:
-        await windowManager.destroy();
+        // Native close is already permitted by setPreventClose(false). Its
+        // default handler owns destruction; another close races that teardown.
+        return;
     }
   }
 

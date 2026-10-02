@@ -1,6 +1,9 @@
 import 'package:aethertune/src/ui/widgets/desktop_tray_controls.dart';
 import 'package:aethertune/src/domain/desktop_tray_action.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:tray_manager/tray_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -80,6 +83,95 @@ void main() {
       desktopWindowCloseAction(minimizeToTray: false),
       DesktopWindowCloseAction.quit,
     );
+  });
+
+  Future<List<MethodCall>> mountTray(
+    WidgetTester tester, {
+    required bool minimizeToTray,
+  }) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    final calls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('window_manager'),
+      (call) async {
+        calls.add(call);
+        return true;
+      },
+    );
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('window_manager'),
+        null,
+      );
+      debugDefaultTargetPlatformOverride = null;
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DesktopTrayControls(
+          minimizeToTray: minimizeToTray,
+          transportActions: const <DesktopTrayTransportAction>{},
+          onTogglePlayPause: () async {},
+          onPrevious: () async {},
+          onNext: () async {},
+          child: const Text('ordinary desktop fixture'),
+        ),
+      ),
+    );
+    await tester.pump();
+    debugDefaultTargetPlatformOverride = null;
+    return calls;
+  }
+
+  Future<void> nativeClose(WidgetTester tester) async {
+    tester.binding.channelBuffers.push(
+      'window_manager',
+      const StandardMethodCodec().encodeMethodCall(
+        const MethodCall('onEvent', <String, Object>{'eventName': 'close'}),
+      ),
+      (_) {},
+    );
+    await tester.pump();
+  }
+
+  testWidgets('allowed native close does not issue a second close', (
+    tester,
+  ) async {
+    final calls = await mountTray(tester, minimizeToTray: false);
+    expect(
+      calls.singleWhere((call) => call.method == 'setPreventClose').arguments,
+      <String, Object>{'isPreventClose': false},
+    );
+    calls.clear();
+    await nativeClose(tester);
+    expect(calls, isEmpty);
+  });
+
+  testWidgets('intercepted native close hides the retained window', (
+    tester,
+  ) async {
+    final calls = await mountTray(tester, minimizeToTray: true);
+    expect(
+      calls.singleWhere((call) => call.method == 'setPreventClose').arguments,
+      <String, Object>{'isPreventClose': true},
+    );
+    calls.clear();
+    await nativeClose(tester);
+    expect(calls.map((call) => call.method), <String>['hide']);
+  });
+
+  testWidgets('tray Quit still explicitly destroys its window once', (
+    tester,
+  ) async {
+    final calls = await mountTray(tester, minimizeToTray: false);
+    calls.clear();
+    final listener =
+        tester.state(find.byType(DesktopTrayControls)) as TrayListener;
+    listener.onTrayMenuItemClick(
+      MenuItem(key: 'quit', label: 'Quit AetherTune'),
+    );
+    await tester.pump();
+    expect(calls.map((call) => call.method), <String>['destroy']);
   });
 
   test('embeds the generated PNG payload in a valid single-image ICO', () {

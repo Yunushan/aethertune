@@ -481,6 +481,27 @@ jobs:
           # Build the second archive after dpkg-deb removes its temporary copy.
           bash scripts/ci/package_linux_tarball.sh apps/mobile/build/linux/x64/release/bundle release/aethertune-linux-x64.tar.gz
 
+      - name: Accept ordinary packaged Linux release
+        if: matrix.target == 'linux'
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(awk '/^version:/ {print $2}' apps/mobile/pubspec.yaml | cut -d+ -f1)"
+          python3 scripts/ci/linux_packaged_release_acceptance.py \
+            --bundle apps/mobile/build/linux/x64/release/bundle \
+            --deb release/aethertune-linux-x64.deb \
+            --tarball release/aethertune-linux-x64.tar.gz \
+            --version "$version" --evidence build/linux-packaged-release-acceptance
+
+      - name: Upload ordinary Linux release acceptance evidence
+        if: always() && matrix.target == 'linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: aethertune-linux-packaged-release-acceptance
+          path: build/linux-packaged-release-acceptance
+          if-no-files-found: warn
+
       - name: Sign and notarize macOS production app
         if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'
         shell: bash
