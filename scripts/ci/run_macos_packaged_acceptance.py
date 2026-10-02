@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import plistlib
@@ -200,6 +202,93 @@ def cleanup_paths(before: list[dict], owned: list[dict], uid: int) -> list[dict]
     return snapshot_paths([Path(row["path"]) for row in before])
 
 
+def launch_log_arguments(app: Path, started: float, ended: float) -> list[str]:
+    require(0 < started <= ended and ended - started <= 300, "Unbounded launch diagnostic interval.")
+    path = str(app)
+    require(app.name == "aethertune.app" and not any(char in path for char in "\r\n\x00"),
+            "Unsafe launch diagnostic app path.")
+    # log show uses the host's local time. Round only to its supported seconds,
+    # retaining the actual interval separately in the diagnostic receipt.
+    start = datetime.fromtimestamp(math.floor(started)).strftime("%Y-%m-%d %H:%M:%S")
+    end = datetime.fromtimestamp(math.ceil(ended)).strftime("%Y-%m-%d %H:%M:%S")
+    predicate = " OR ".join(f"eventMessage CONTAINS {json.dumps(value, ensure_ascii=False)}"
+                            for value in [path, str(app / "Contents/MacOS/aethertune"), BUNDLE_ID])
+    return ["/usr/bin/log", "show", "--style", "json", "--info", "--debug",
+            "--start", start, "--end", end, "--predicate", f"({predicate})"]
+
+
+def crash_snapshot(roots: list[Path]) -> dict[str, dict]:
+    records: dict[str, dict] = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        require(root.resolve() == root and root.is_dir(), "Unexpected crash-report directory identity.")
+        for path in root.iterdir():
+            if not re.fullmatch(r"aethertune[A-Za-z0-9_. -]*\.(ips|crash)", path.name, re.IGNORECASE):
+                continue
+            value = path.lstat()
+            records[str(path)] = {"device": value.st_dev, "inode": value.st_ino,
+                                  "mtimeNs": value.st_mtime_ns, "size": value.st_size,
+                                  "mode": value.st_mode}
+    return records
+
+
+def retain_fresh_crashes(roots: list[Path], before: dict[str, dict], app: Path,
+                        started: float, ended: float, destination: Path) -> list[dict]:
+    records = []
+    for name, metadata in crash_snapshot(roots).items():
+        if name in before or not started <= metadata["mtimeNs"] / 1e9 <= ended:
+            continue
+        row = {"source": name, **metadata, "retained": False}
+        records.append(row)
+        if not stat.S_ISREG(metadata["mode"]) or metadata["size"] > 2 * 1024 * 1024 or len(records) > 8:
+            row["reason"] = "Not a regular report, exceeds 2 MiB, or exceeds eight report limit."
+            continue
+        path = Path(name)
+        with path.open("rb") as stream:
+            value = os.fstat(stream.fileno())
+            require((value.st_dev, value.st_ino, value.st_mtime_ns, value.st_size, value.st_mode)
+                    == tuple(metadata[key] for key in ["device", "inode", "mtimeNs", "size", "mode"]),
+                    "Crash-report identity changed before read.")
+            data = stream.read(2 * 1024 * 1024 + 1)
+            require(len(data) == metadata["size"] and len(data) <= 2 * 1024 * 1024,
+                    "Crash-report size changed or exceeded limit.")
+            after = os.fstat(stream.fileno())
+            require((after.st_mtime_ns, after.st_size) == (value.st_mtime_ns, value.st_size),
+                    "Crash-report changed during read.")
+        after_path = path.lstat()
+        require((after_path.st_dev, after_path.st_ino, after_path.st_mtime_ns, after_path.st_size, after_path.st_mode)
+                == tuple(metadata[key] for key in ["device", "inode", "mtimeNs", "size", "mode"]),
+                "Crash-report path identity changed during read.")
+        if str(app).encode() not in data and BUNDLE_ID.encode() not in data:
+            row["reason"] = "Report does not identify the exact app path or bundle ID."
+            continue
+        destination.mkdir(exist_ok=True)
+        target = destination / f"{len(records):02d}-{path.name}"
+        target.write_bytes(data)
+        row.update(retained=True, evidence=str(target), sha256=hashlib.sha256(data).hexdigest())
+    return records
+
+
+def launch_diagnostics(run: Commands, evidence: Path, app: Path, roots: list[Path],
+                       before: dict[str, dict], started: float, ended: float) -> dict:
+    result = {"startedUnix": started, "endedUnix": ended, "errors": [], "crashReports": [],
+              "scope": "Exact attempt interval and app path/bundle ID only; read-only diagnostics do not change failure status."}
+    try:
+        run(launch_log_arguments(app, started, ended), timeout=30,
+            binary=evidence / "launch-system-log.json")
+    except Exception as error:
+        result["errors"].append(f"Unified log collection: {error}")
+    try:
+        result["crashCollectionEndedUnix"] = time.time()
+        result["crashReports"] = retain_fresh_crashes(roots, before, app, started, result["crashCollectionEndedUnix"],
+                                                     evidence / "crash-reports")
+    except Exception as error:
+        result["errors"].append(f"Fresh app crash-report collection: {error}")
+    write(evidence / "launch-diagnostics.json", result)
+    return result
+
+
 class Commands:
     def __init__(self, evidence: Path):
         self.evidence, self.sequence = evidence, 0
@@ -321,6 +410,15 @@ def execute(args: argparse.Namespace) -> int:
         require(set(archs) == {"arm64", "x86_64"}, "Candidate executable must remain universal.")
         run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)])
         run(["/usr/bin/codesign", "--display", "--verbose=4", str(app)])
+        entitlements = {}
+        for architecture in sorted(archs):
+            target = evidence / f"codesign-entitlements-{architecture}.xml"
+            run(["/usr/bin/codesign", "--display", "--arch", architecture,
+                 "--entitlements", "-", "--xml", str(app)], binary=target)
+            value = plistlib.loads(target.read_bytes())
+            require(isinstance(value, dict), "Unexpected embedded entitlement dictionary.")
+            entitlements[architecture] = value
+        write(evidence / "codesign-entitlements.json", entitlements)
         xattrs = run(["/usr/bin/xattr", "-lr", str(app)])
         require("com.apple.quarantine" not in xattrs, "Quarantined package requires external trust review; it will not be stripped.")
         observer = stage / "observer"
@@ -334,7 +432,29 @@ def execute(args: argparse.Namespace) -> int:
         before = snapshot_paths(paths)
         write(evidence / "state-before.json", {"paths": before})
         require(all(row["present"] is False for row in before), "Existing app-owned storage prevents isolated launch.")
-        run([str(observer), "run", str(app), str(evidence), digest(executable)], timeout=180)
+        crash_roots = [Path(snapshot["foundationHome"]) / "Library/Logs/DiagnosticReports",
+                       Path("/Library/Logs/DiagnosticReports")]
+        crash_before = crash_snapshot(crash_roots)
+        write(evidence / "crash-reports-before.json", crash_before)
+        attempt_started = time.time()
+        try:
+            run([str(observer), "run", str(app), str(evidence), digest(executable)], timeout=180)
+        except Exception:
+            attempt_ended = time.time()
+            try:
+                launch_diagnostics(run, evidence, app, crash_roots, crash_before,
+                                   attempt_started, attempt_ended)
+            except Exception as error:
+                report["diagnosticError"] = str(error)
+            try:
+                compare_extracted(stage, {**app_records,
+                                          ".owned": {"sha256": digest(stage / ".owned"), "mode": (stage / ".owned").stat().st_mode},
+                                          "observer": {"sha256": digest(observer), "mode": observer.stat().st_mode}})
+                write(evidence / "package-preservation.json", {"appEntries": len(app_records), "beforeLaunchEqual": True,
+                                                               "afterQuitEqual": False, "afterFailedAttemptEqual": True})
+            except Exception as error:
+                report["failedAttemptPackageComparisonError"] = str(error)
+            raise
         native = json.loads((evidence / "native-result.json").read_text(encoding="utf-8"))
         require(native["status"] == "passed" and native["normalQuit"] is True
                 and native["ownedProcessAbsent"] is True and native["exit"]["rawWaitStatus"] == 0,

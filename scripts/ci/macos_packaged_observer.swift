@@ -78,11 +78,30 @@ func snapshot() throws -> [String: Any] {
         throw ObservationError("Actual passwd home unavailable.")
     }
     let keychain = try keychainMetadata()
+    let session = CGSessionCopyCurrentDictionary() as? [String: Any] ?? [:]
+    var sessionMetadata: [String: Any] = [:]
+    for key in ["kCGSSessionUserIDKey", "kCGSSessionUserNameKey", "kCGSSessionOnConsoleKey", "kCGSSessionLoginDoneKey"] {
+        if let value = session[key] { sessionMetadata[key] = value }
+    }
     return ["foundationHome": NSHomeDirectory(), "passwdHome": String(cString: directory),
             "username": NSUserName(), "uid": Int(getuid()),
+            "graphicsSessionAvailable": !session.isEmpty, "graphicsSession": sessionMetadata,
             "screenCaptureAllowed": CGPreflightScreenCaptureAccess(),
             "runningAppCount": NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).count,
             "keychainAppItemCount": keychain["appItemCount"]!, "keychain": keychain]
+}
+
+func errorChain(_ error: Error) -> [[String: Any]] {
+    var result: [[String: Any]] = []
+    var current: NSError? = error as NSError
+    while let value = current, result.count < 8 {
+        var row: [String: Any] = ["domain": value.domain, "code": value.code,
+                                  "description": String(value.localizedDescription.prefix(4096))]
+        if let reason = value.localizedFailureReason { row["failureReason"] = String(reason.prefix(4096)) }
+        result.append(row)
+        current = value.userInfo[NSUnderlyingErrorKey] as? NSError
+    }
+    return result
 }
 
 func ownedBundle(_ app: URL) throws -> URL {
@@ -289,6 +308,7 @@ func runApp(_ bundle: URL, evidence: URL, expectedHash: String) throws {
     } catch {
         result["status"] = "failed"
         result["error"] = String(describing: error)
+        result["errorChain"] = errorChain(error)
         if let receipt = receipt {
             do { result["failureCleanup"] = try stopOwned(receipt, permitForcedCleanup: true) }
             catch { result["cleanupError"] = String(describing: error) }

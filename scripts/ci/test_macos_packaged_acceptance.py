@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import stat
 import tempfile
+import time
 import unittest
 import warnings
 import zipfile
@@ -188,6 +189,63 @@ class AcceptanceGuardsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             harness.snapshot_paths([path])
         self.assertTrue(target.exists())
+
+    def test_launch_logs_are_time_bounded_and_match_only_exact_app_or_bundle(self) -> None:
+        app = self.root / 'owned "quoted"' / "aethertune.app"
+        command = harness.launch_log_arguments(app, 1_700_000_000.1, 1_700_000_045.9)
+        self.assertEqual(command[:4], ["/usr/bin/log", "show", "--style", "json"])
+        self.assertIn("--start", command)
+        self.assertIn("--end", command)
+        predicate = command[-1]
+        self.assertIn(harness.BUNDLE_ID, predicate)
+        self.assertIn('\\"quoted\\"', predicate)
+        self.assertNotIn("process ==", predicate)
+        self.assertEqual(predicate.count("eventMessage CONTAINS"), 3)
+        for started, ended in [(100.0, 99.0), (100.0, 401.0), (0.0, 1.0)]:
+            with self.subTest(started=started, ended=ended), self.assertRaises(ValueError):
+                harness.launch_log_arguments(app, started, ended)
+        with self.assertRaises(ValueError):
+            harness.launch_log_arguments(self.root / "newline\n" / "aethertune.app", 100, 101)
+
+    def test_only_new_bounded_app_identified_crash_reports_are_retained(self) -> None:
+        reports = self.root / "reports"
+        reports.mkdir()
+        old = reports / "aethertune-old.ips"
+        old.write_text(harness.BUNDLE_ID, encoding="utf-8")
+        before = harness.crash_snapshot([reports])
+        started = time.time() - 1
+        old.write_text(harness.BUNDLE_ID + " changed", encoding="utf-8")
+        expected = reports / "aethertune-new.ips"
+        expected.write_text(harness.BUNDLE_ID, encoding="utf-8")
+        (reports / "other-app.ips").write_text(harness.BUNDLE_ID, encoding="utf-8")
+        (reports / "aethertune-unrelated.ips").write_text("unrelated process", encoding="utf-8")
+        (reports / "aethertune-oversize.ips").write_bytes(b"x" * (2 * 1024 * 1024 + 1))
+        stale = reports / "aethertune-stale.crash"
+        stale.write_text(harness.BUNDLE_ID, encoding="utf-8")
+        os.utime(stale, (started - 5, started - 5))
+        rows = harness.retain_fresh_crashes([reports], before, self.root / "aethertune.app",
+                                            started, time.time() + 1, self.root / "retained")
+        retained = [row for row in rows if row["retained"]]
+        self.assertEqual([row["source"] for row in retained], [str(expected)])
+        self.assertEqual(Path(retained[0]["evidence"]).read_bytes(), expected.read_bytes())
+        self.assertEqual(retained[0]["sha256"], harness.digest(expected))
+        self.assertNotIn(str(old), [row["source"] for row in rows])
+        self.assertEqual(len(list((self.root / "retained").iterdir())), 1)
+
+    def test_diagnostic_command_failure_is_retained_without_hiding_crash_evidence(self) -> None:
+        evidence = self.root / "evidence"
+        evidence.mkdir()
+        reports = self.root / "reports"
+        reports.mkdir()
+        (reports / "aethertune-new.ips").write_text(harness.BUNDLE_ID, encoding="utf-8")
+        def denied(_arguments, **_options):
+            raise ValueError("read-only log permission denied")
+        result = harness.launch_diagnostics(denied, evidence, self.root / "aethertune.app", [reports], {},
+                                           time.time() - 1, time.time())
+        self.assertIn("permission denied", result["errors"][0])
+        self.assertEqual(len([row for row in result["crashReports"] if row["retained"]]), 1)
+        self.assertTrue((evidence / "launch-diagnostics.json").is_file())
+        self.assertNotIn("status", result)
 
     def test_scoped_workflow_permissions_fixed_pr_target_and_input_transport(self) -> None:
         workflow = (harness.ROOT / ".github/workflows/macos-packaged-acceptance.yml").read_text(encoding="utf-8")
