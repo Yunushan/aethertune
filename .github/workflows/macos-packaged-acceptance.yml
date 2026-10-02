@@ -1,0 +1,87 @@
+name: macOS packaged acceptance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - '.github/workflows/macos-packaged-acceptance.yml'
+      - '.github/workflows/aethertune-ci.yml'
+      - 'scripts/ci/run_macos_packaged_acceptance.py'
+      - 'scripts/ci/macos_packaged_observer.swift'
+      - 'scripts/ci/test_macos_packaged_acceptance.py'
+  workflow_dispatch:
+    inputs:
+      candidate_run:
+        description: Successful already attested candidate run
+        required: true
+        default: '37041509348'
+        type: string
+      candidate_source:
+        description: Exact candidate source SHA
+        required: true
+        default: a1d75fbc37fd9951130194798811cfd913e34724
+        type: string
+      candidate_ref:
+        description: Exact main or reviewed codex branch ref
+        required: true
+        default: refs/heads/codex/readiness-linux-release
+        type: string
+      candidate_attempt:
+        description: Exact successful assembly attempt
+        required: true
+        default: '1'
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  attestations: read
+
+concurrency:
+  group: macos-packaged-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ordinary-app:
+    name: Ordinary universal package launch on arm64
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed acceptance harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Test artifact and ownership guards
+        run: python3 scripts/ci/test_macos_packaged_acceptance.py
+
+      - name: Observe unchanged attested ordinary app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # PR runs exercise this fixed attested candidate before merge.
+          CANDIDATE_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_run || '37041509348' }}
+          CANDIDATE_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_source || 'a1d75fbc37fd9951130194798811cfd913e34724' }}
+          CANDIDATE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_ref || 'refs/heads/codex/readiness-linux-release' }}
+          CANDIDATE_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_attempt || '1' }}
+        run: >-
+          python3 scripts/ci/run_macos_packaged_acceptance.py
+          --candidate-run "$CANDIDATE_RUN" --source "$CANDIDATE_SOURCE"
+          --source-ref "$CANDIDATE_REF" --candidate-attempt "$CANDIDATE_ATTEMPT"
+          --evidence build/macos-packaged-acceptance
+
+      - name: Upload partial or completed ordinary app evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-macos-packaged-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            build/macos-packaged-acceptance/*.json
+            build/macos-packaged-acceptance/*.log
+            build/macos-packaged-acceptance/*.png
+            build/macos-packaged-acceptance/*.xml
+            build/macos-packaged-acceptance/crash-reports/*.ips
+            build/macos-packaged-acceptance/crash-reports/*.crash
