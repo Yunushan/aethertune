@@ -104,6 +104,11 @@ jobs:
       - name: Test release workflow contract
         run: python3 scripts/ci/test_release_workflow.py
 
+      - name: Test ordinary Linux behavior input, lifecycle and UI guards
+        run: |
+          python3 scripts/ci/test_prepare_linux_release_behavior.py
+          python3 scripts/ci/test_linux_packaged_release_acceptance.py
+          python3 scripts/ci/test_linux_release_ui_acceptance.py
       - name: Test container vulnerability gate
         run: python3 scripts/ci/test_scan_server_container.py
 

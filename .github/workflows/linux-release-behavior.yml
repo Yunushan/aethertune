@@ -1,0 +1,101 @@
+name: linux-release-behavior
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/linux-release-behavior.yml'
+      - 'scripts/ci/prepare_linux_release_behavior.py'
+      - 'scripts/ci/test_prepare_linux_release_behavior.py'
+      - 'scripts/ci/linux_packaged_release_acceptance.py'
+      - 'scripts/ci/test_linux_packaged_release_acceptance.py'
+      - 'scripts/ci/linux_release_ui_acceptance.py'
+      - 'scripts/ci/test_linux_release_ui_acceptance.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ordinary-linux-behavior:
+    name: Original attested Linux release behavior
+    # Fork PRs are excluded; exclusion is not acceptance evidence.
+    if: >-
+      github.repository == 'Yunushan/aethertune' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXECUTOR_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact behavior executor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify input and lifecycle guard tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/linux-release-behavior/guard-tests
+          python3 scripts/ci/test_prepare_linux_release_behavior.py 2>&1 | tee build/linux-release-behavior/guard-tests/input.log
+          python3 scripts/ci/test_linux_packaged_release_acceptance.py 2>&1 | tee build/linux-release-behavior/guard-tests/lifecycle.log
+          python3 scripts/ci/test_linux_release_ui_acceptance.py 2>&1 | tee build/linux-release-behavior/guard-tests/observer.log
+
+      - name: Checkout exact original product verifier source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: a1d75fbc37fd9951130194798811cfd913e34724
+          path: build/linux-release-behavior/product-source
+          persist-credentials: false
+
+      - name: Verify fixed official original release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/ci/prepare_linux_release_behavior.py \
+            --product-source build/linux-release-behavior/product-source \
+            --output build/linux-release-behavior/input
+
+      - name: Install ordinary Linux runtime and accessibility prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            dbus-x11 gnome-keyring libasound2t64 libayatana-appindicator3-1 \
+            libgtk-3-0t64 libkeybinder-3.0-0 libmpv2 libsecret-1-0 \
+            pulseaudio pulseaudio-utils xauth xvfb \
+            python3-gi gir1.2-atspi-2.0 at-spi2-core libatk-adaptor libxtst6 \
+            fuse3 xdg-desktop-portal xdg-desktop-portal-gtk
+
+      - name: Observe original packaged Linux behavior
+        run: |
+          python3 scripts/ci/linux_packaged_release_acceptance.py \
+            --behavior \
+            --product-provenance build/linux-release-behavior/input/product-provenance.json \
+            --bundle build/linux-release-behavior/input/bundle \
+            --deb build/linux-release-behavior/input/release/aethertune-linux-x64.deb \
+            --tarball build/linux-release-behavior/input/release/aethertune-linux-x64.tar.gz \
+            --version 0.1.0 \
+            --evidence build/linux-release-behavior/acceptance
+
+      - name: Retain actual input proof, runtime observations and cleanup
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: linux-release-behavior-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/linux-release-behavior/input/product-provenance.json
+            build/linux-release-behavior/input/proof/
+            build/linux-release-behavior/acceptance/
+            build/linux-release-behavior/guard-tests/
+          if-no-files-found: error
+          retention-days: 30
+

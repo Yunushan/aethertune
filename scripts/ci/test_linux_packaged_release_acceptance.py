@@ -13,6 +13,7 @@ import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import linux_packaged_release_acceptance as gate
 
@@ -176,12 +177,13 @@ Description: Free and open-source local-first music player
 
     def test_private_environment_does_not_change_coordinator_or_attach_shared_session(self):
         original = {"HOME": "/personal", "DISPLAY": ":0", "DBUS_SESSION_BUS_ADDRESS": "shared",
-                    "PULSE_SERVER": "shared", "WAYLAND_DISPLAY": "wayland-0", "PATH": "/bin"}
+                    "PULSE_SERVER": "shared", "WAYLAND_DISPLAY": "wayland-0", "PATH": "/bin",
+                    "GNOME_KEYRING_CONTROL": "/personal/keyring", "GNOME_KEYRING_PID": "99", "SSH_AUTH_SOCK": "/personal/agent"}
         before = original.copy()
         child = gate.private_environment(self.root, original)
         self.assertEqual(original, before)
         self.assertEqual(child["HOME"], str(self.root))
-        for name in ("DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "PULSE_SERVER", "WAYLAND_DISPLAY"):
+        for name in ("DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "PULSE_SERVER", "WAYLAND_DISPLAY", "GNOME_KEYRING_CONTROL", "GNOME_KEYRING_PID", "SSH_AUTH_SOCK"):
             self.assertNotIn(name, child)
         self.assertEqual(child["PATH"], "/bin")
 
@@ -235,6 +237,187 @@ Description: Free and open-source local-first music player
             if handle.poll() is None:
                 handle.terminate()
                 handle.wait(timeout=5)
+
+
+class OrdinaryBehaviorTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        for name in ("data", "documents"):
+            (self.root / name).mkdir()
+        self.media = gate.make_media(self.root)
+        self.track = {"id": "known-fixture-😀", "localPath": str(self.media), "title": "owned WAV"}
+        self.library = {"aethertune.tracks.v1": json.dumps([self.track]),
+                        "aethertune.onboarding_completed.v1": True,
+                        "aethertune.desktop_density_preference.v1": "compact",
+                        "unrelated-credential-value": "must not appear in evidence"}
+        self.player = {"aethertune.player_queue.v1": json.dumps({"tracks": [self.track],
+                        "currentTrackId": self.track["id"], "currentIndex": 0})}
+
+    def raw(self, values):
+        payload = json.dumps(values)
+        return json.dumps({"format": 1, "generation": "a" * 32, "payload": payload,
+                           "checksum": hashlib.sha256(payload.encode()).hexdigest()}).encode()
+
+    def save(self):
+        for role, values in (("library", self.library), ("player", self.player)):
+            directory = self.root / f"data/dev.aethertune/aethertune/{role}"
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "library.json").write_bytes(self.raw(values))
+
+    def test_real_fixture_hash_and_snapshot_metadata_preserve_only_known_predicates(self):
+        self.save()
+        receipt = gate.state_snapshot(self.root)
+        self.assertEqual(set(receipt["files"]), {"library", "player"})
+        self.assertTrue(all(value["stable_during_observation"] for value in receipt["files"].values()))
+        self.assertEqual(receipt["predicates"]["density"], "compact")
+        mpris_path = "/org/mpris/MediaPlayer2/TrackList/" + self.track["id"].encode("utf-16-be").hex()
+        self.assertEqual(receipt["predicates"]["fixture_mpris_track_id_sha256"], hashlib.sha256(mpris_path.encode()).hexdigest())
+        self.assertNotIn("must not appear", json.dumps(receipt))
+        self.assertNotIn(self.track["localPath"], json.dumps(receipt))
+
+    def test_empty_or_checksum_tampered_state_cannot_claim_persistence(self):
+        with self.assertRaisesRegex(RuntimeError, "snapshots are absent"):
+            gate.state_snapshot(self.root)
+        self.save()
+        path = self.root / "data/dev.aethertune/aethertune/library/library.json"
+        content = json.loads(path.read_bytes())
+        content["payload"] = content["payload"].replace("compact", "comfortable")
+        path.write_text(json.dumps(content))
+        with self.assertRaisesRegex(RuntimeError, "checksum differs"):
+            gate.state_snapshot(self.root)
+
+    def test_wrong_queue_or_media_bytes_fail_even_with_valid_envelope(self):
+        self.player["aethertune.player_queue.v1"] = json.dumps({"tracks": [self.track], "currentTrackId": "foreign", "currentIndex": 0})
+        with self.assertRaisesRegex(RuntimeError, "current track"):
+            gate.snapshot_predicates(self.library, self.player, self.root)
+        self.media.write_bytes(b"changed")
+        with self.assertRaisesRegex(RuntimeError, "owned WAV"):
+            gate.snapshot_predicates(self.library, self.player, self.root)
+
+    def test_native_state_role_alias_is_rejected(self):
+        self.save()
+        directory = self.root / "data/other/library"
+        directory.mkdir(parents=True)
+        (directory / "library.json").write_bytes(self.raw(self.library))
+        with self.assertRaisesRegex(RuntimeError, "Ambiguous"):
+            gate.state_snapshot(self.root)
+
+    def test_mount_cleanup_guard_distinguishes_owned_subtree_and_prefix_alias(self):
+        owned = Path("/tmp/aethertune-release-fixture-owned")
+        info = "1 0 0:1 / /tmp/aethertune-release-fixture-owned/runtime/doc rw - fuse.portal portal rw\n"
+        info += "2 0 0:2 / /tmp/aethertune-release-fixture-owned-foreign rw - tmpfs tmpfs rw\n"
+        self.assertEqual(gate.mounts_under(owned, info), [{"mountpoint": str(owned / "runtime/doc"), "filesystem": "fuse.portal",
+                                                       "mount_id": 1, "device": "0:1", "options": "rw", "source": "portal"}])
+
+    def test_first_phase_nonzero_exit_is_retained_and_does_not_authorize_reopen(self):
+        app = SimpleNamespace(handle=SimpleNamespace(pid=42, wait=lambda timeout: 7), started_utc="fixture",
+                              identity={"pid": 42, "start_ticks": 1, "exe": "/opt/aethertune/aethertune"})
+        report = {}
+        with self.assertRaisesRegex(RuntimeError, "returncode=7"):
+            gate.wait_for_ordinary_exit(app, report, self.root, lambda process: {}, phase="initial")
+        receipt = json.loads((self.root / "application-exit-initial.json").read_text())
+        self.assertEqual(receipt, report["application_exits"]["initial"])
+        self.assertEqual(receipt["returncode"], 7)
+        self.assertNotIn("application_exit", report)
+
+    def test_behavior_requires_provenance_before_any_native_call(self):
+        with self.assertRaisesRegex(RuntimeError, "requires verified"):
+            gate.behavior_provenance(None, SimpleNamespace(), {}, {})
+        path = self.root / "provenance.json"
+        path.write_text(json.dumps({"schemaVersion": 1, "status": "PASS"}))
+        with self.assertRaisesRegex(RuntimeError, "not verified input"):
+            gate.behavior_provenance(path, SimpleNamespace(), {}, {})
+
+    def test_timer_progress_cannot_replace_owned_uncorked_native_output(self):
+        identity = {"pid": 42, "start_ticks": 7, "exe": "/opt/aethertune/aethertune"}
+        sinks = [{"index": 1, "name": "aethertune_release_fixture", "state": "RUNNING"}]
+        stream = {"index": 2, "sink": 1, "corked": False, "sample_specification": "float32le 2ch 44100Hz",
+                  "properties": {"application.process.id": "42", "application.process.binary": "aethertune", "unrelated": "secret"}}
+        receipt = gate.audio_output_predicate(sinks, [stream], identity)
+        self.assertFalse(receipt["corked"])
+        self.assertNotIn("secret", json.dumps(receipt))
+        inventory = gate.audio_output_inventory(sinks, [dict(stream, corked=True)])
+        self.assertTrue(inventory["inputs"][0]["corked"])
+        self.assertNotIn("secret", json.dumps(inventory))
+        for changed in (dict(stream, corked=True), dict(stream, sink=99), dict(stream, index=True),
+                        dict(stream, sample_specification="missing PCM fields"),
+                        dict(stream, properties={"application.process.id": "99", "application.process.binary": "aethertune"})):
+            with self.assertRaises(RuntimeError):
+                gate.audio_output_predicate(sinks, [changed], identity)
+
+    def test_document_helper_exception_rejects_foreign_lineage_uid_argv_binary_or_mount(self):
+        binary = self.root / "fusermount3"
+        binary.write_bytes(b"owned installed helper predicate fixture")
+        parent = {"pid": 41, "start_ticks": 7, "exe": "/usr/libexec/xdg-document-portal"}
+        mount = {"mountpoint": str(self.root / "runtime/doc"), "filesystem": "fuse.portal", "source": "portal",
+                 "mount_id": 3, "device": "0:2", "options": "rw,nosuid,nodev,relatime"}
+        record = {"pid": 42, "start_ticks": 8, "parent_pid": 41, "exe": str(binary), "executable_sha256": gate.file_hash(binary),
+                  "parent_identity": parent, "uids": [1001, 0, 0, 0],
+                  "argv": ["fusermount3", "-o", "rw,nosuid,nodev,fsname=portal,subtype=portal,auto_unmount", "--", mount["mountpoint"]]}
+        self.assertEqual(gate.validate_fuse_helper(record, parent, str(binary), self.root, 1001, mount), record)
+        invalid = [dict(record, parent_pid=99), dict(record, parent_identity=dict(parent, start_ticks=6)),
+                   dict(record, start_ticks=6), dict(record, uids=[0, 0, 0, 0]), dict(record, exe="/foreign/fusermount3"),
+                   dict(record, executable_sha256="f" * 64),
+                   dict(record, argv=record["argv"][:-1] + [str(self.root.parent / "foreign")]),
+                   dict(record, argv=["fusermount3", "-u", "--", mount["mountpoint"]]),
+                   dict(record, argv=["fusermount3", "-o", record["argv"][2] + ",allow_other", "--", mount["mountpoint"]])]
+        for changed in invalid:
+            with self.subTest(changed=changed), self.assertRaises(RuntimeError):
+                gate.validate_fuse_helper(changed, parent, str(binary), self.root, 1001, mount)
+        with self.assertRaisesRegex(RuntimeError, "mount identity"):
+            gate.validate_fuse_helper(record, parent, str(binary), self.root, 1001, dict(mount, mountpoint=str(self.root.parent / "foreign")))
+
+    def test_reparented_helper_is_still_live_until_the_original_generation_disappears(self):
+        record = {"pid": 42, "start_ticks": 8, "parent_pid": 41}
+        with patch.object(gate, "process_header", return_value={"pid": 42, "start_ticks": 8, "parent_pid": 1}):
+            self.assertTrue(gate.generation_alive(record))
+        with patch.object(gate, "process_header", return_value={"pid": 42, "start_ticks": 9, "parent_pid": 1}):
+            self.assertFalse(gate.generation_alive(record))
+        with patch.object(gate, "process_header", return_value=None):
+            self.assertFalse(gate.generation_alive(record))
+
+    def test_rebound_harness_and_original_product_are_independently_checked(self):
+        checkout = self.root / "checkout"
+        drivers = {}
+        for name in ("scripts/ci/linux_packaged_release_acceptance.py", "scripts/ci/linux_release_ui_acceptance.py",
+                     "scripts/ci/prepare_linux_release_behavior.py", ".github/workflows/linux-release-behavior.yml"):
+            path = checkout / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"bound harness")
+            drivers[name] = gate.file_hash(path)
+        args = SimpleNamespace(version="0.1.0", bundle=self.root / "bundle", deb=self.root / "app.deb", tarball=self.root / "app.tar.gz")
+        env = {"GITHUB_REPOSITORY": "Yunushan/aethertune", "GITHUB_SHA": "b" * 40, "GITHUB_REF": "refs/heads/codex/behavior",
+               "GITHUB_RUN_ID": "12", "GITHUB_RUN_ATTEMPT": "1"}
+        receipt = {"schemaVersion": 1, "status": "verified-input", "product": {
+            "repository": "Yunushan/aethertune", "sourceCommit": gate.PRODUCT_COMMIT, "sourceRef": gate.PRODUCT_REF,
+            "runId": 37041509348, "runAttempt": 1, "version": "0.1.0",
+            "artifact": {"id": 11243123879, "name": "aethertune-release-bundle", "outerSha256": "68876ee3e05f7087b6d33309a6fb5fc3ed8f49a9660d28cb54a4b8c7516902cf"},
+            "linux": {"debSha256": gate.PRODUCT_DEB, "tarballSha256": gate.PRODUCT_TAR, "executableSha256": gate.PRODUCT_EXE, "bundleEntries": 43},
+            "certificate": {"subjectAlternativeName": f"https://github.com/Yunushan/aethertune/.github/workflows/aethertune-release.yml@{gate.PRODUCT_REF}",
+                "issuer": "https://token.actions.githubusercontent.com", "buildSignerDigest": gate.PRODUCT_COMMIT,
+                "sourceRepositoryDigest": gate.PRODUCT_COMMIT, "sourceRepositoryRef": gate.PRODUCT_REF,
+                "runnerEnvironment": "github-hosted", "runInvocationURI": "https://github.com/Yunushan/aethertune/actions/runs/37041509348/attempts/1"}},
+            "executor": {"repository": env["GITHUB_REPOSITORY"], "sourceCommit": "b" * 40, "triggerSha": env["GITHUB_SHA"],
+                "ref": env["GITHUB_REF"], "runId": 12, "runAttempt": 1, "driverHashes": drivers},
+            "paths": {name: str(getattr(args, name).resolve()) for name in ("bundle", "deb", "tarball")}}
+        bundle = {"aethertune": {"sha256": gate.PRODUCT_EXE}, **{str(i): {} for i in range(42)}}
+        hashes = {"deb": gate.PRODUCT_DEB, "tarball": gate.PRODUCT_TAR}
+        path = self.root / "provenance.json"
+        def verify():
+            path.write_text(json.dumps(receipt))
+            return gate.behavior_provenance(path, args, hashes, bundle, env)
+        with patch.object(gate, "__file__", str(checkout / "scripts/ci/linux_packaged_release_acceptance.py")), \
+             patch.object(gate, "run", return_value=SimpleNamespace(stdout="b" * 40 + "\n")):
+            self.assertEqual(verify()["product"]["sourceCommit"], gate.PRODUCT_COMMIT)
+            receipt["product"]["sourceCommit"] = "b" * 40
+            with self.assertRaisesRegex(RuntimeError, "Original product identity"):
+                verify()
+            receipt["product"]["sourceCommit"] = gate.PRODUCT_COMMIT
+            receipt["executor"]["driverHashes"]["scripts/ci/linux_release_ui_acceptance.py"] = "f" * 64
+            with self.assertRaisesRegex(RuntimeError, "driver hash differs"):
+                verify()
 
 
 if __name__ == "__main__":
