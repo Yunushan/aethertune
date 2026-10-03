@@ -501,7 +501,7 @@ class PrivateBus:
     def __init__(self, address):
         # Lazy import: default onboarding gate retains its original prerequisites.
         from gi.repository import Gio, GLib
-        self.GLib = GLib
+        self.GLib, self.Gio = GLib, Gio
         self.connection = Gio.DBusConnection.new_for_address_sync(address,
             Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
 
@@ -520,13 +520,17 @@ class PrivateBus:
                     f"Owned service exited or changed identity: {name}")
             try:
                 actual = self.pid(name)
-                require(actual == process.handle.pid, f"Private bus owner differs: {name}")
-                return {"name": name, "identity": process.identity}
-            except RuntimeError:
-                raise
-            except Exception as error:
-                last = type(error).__name__
-                time.sleep(0.2)
+            except self.GLib.Error as error:
+                # GLib.Error is also a RuntimeError. Classify the real remote
+                # error through Gio; a missing name is the only startup retry.
+                remote = self.Gio.DBusError.get_remote_error(error) if self.Gio.DBusError.is_remote_error(error) else None
+                if remote != "org.freedesktop.DBus.Error.NameHasNoOwner":
+                    raise
+                last = remote
+                time.sleep(min(0.2, max(0, deadline - time.monotonic())))
+                continue
+            require(actual == process.handle.pid, f"Private bus owner differs: {name}")
+            return {"name": name, "identity": process.identity}
         raise RuntimeError(f"Owned service did not acquire {name}: {last}")
 
     def close(self):

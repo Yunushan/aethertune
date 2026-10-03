@@ -13,7 +13,7 @@ import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import linux_packaged_release_acceptance as gate
 
@@ -377,6 +377,41 @@ class OrdinaryBehaviorTest(unittest.TestCase):
             self.assertFalse(gate.generation_alive(record))
         with patch.object(gate, "process_header", return_value=None):
             self.assertFalse(gate.generation_alive(record))
+
+    def test_glib_runtimeerror_subclass_retries_only_actual_missing_remote_name(self):
+        class RemoteError(RuntimeError):
+            def __init__(self, remote):
+                super().__init__("deliberately not the protocol name")
+                self.remote = remote
+        bus = object.__new__(gate.PrivateBus)
+        bus.GLib = SimpleNamespace(Error=RemoteError)
+        bus.Gio = SimpleNamespace(DBusError=SimpleNamespace(is_remote_error=lambda error: error.remote is not None,
+                                                           get_remote_error=lambda error: error.remote))
+        identity = {"pid": 42, "start_ticks": 7, "exe": "/usr/libexec/at-spi2-registryd"}
+        process = SimpleNamespace(handle=SimpleNamespace(pid=42, poll=lambda: None), identity=identity)
+        with patch.object(gate, "process_identity", return_value=identity), patch.object(gate.time, "sleep"):
+            bus.pid = Mock(side_effect=[RemoteError("org.freedesktop.DBus.Error.NameHasNoOwner"), 42])
+            self.assertEqual(bus.wait_owner("org.a11y.atspi.Registry", process)["identity"], identity)
+            self.assertEqual(bus.pid.call_count, 2)
+            bus.pid = Mock(return_value=99)
+            with self.assertRaisesRegex(RuntimeError, "owner differs"):
+                bus.wait_owner("org.a11y.atspi.Registry", process)
+            self.assertEqual(bus.pid.call_count, 1)
+            for remote in (None, "org.freedesktop.DBus.Error.AccessDenied", "org.freedesktop.DBus.Error.NoReply"):
+                bus.pid = Mock(side_effect=RemoteError(remote))
+                with self.assertRaises(RemoteError):
+                    bus.wait_owner("org.a11y.atspi.Registry", process)
+                self.assertEqual(bus.pid.call_count, 1)
+            # Even a string resembling the remote name is not an API identity.
+            bus.pid = Mock(side_effect=RuntimeError("org.freedesktop.DBus.Error.NameHasNoOwner"))
+            with self.assertRaises(RuntimeError):
+                bus.wait_owner("org.a11y.atspi.Registry", process)
+            self.assertEqual(bus.pid.call_count, 1)
+            bus.pid = Mock(side_effect=RemoteError("org.freedesktop.DBus.Error.NameHasNoOwner"))
+            with patch.object(gate.time, "monotonic", side_effect=[0, 0.1, 0.2, 1.1]), \
+                 self.assertRaisesRegex(RuntimeError, "did not acquire"):
+                bus.wait_owner("org.a11y.atspi.Registry", process, timeout=1)
+            self.assertEqual(bus.pid.call_count, 1)
 
     def test_rebound_harness_and_original_product_are_independently_checked(self):
         checkout = self.root / "checkout"
