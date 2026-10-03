@@ -25,7 +25,7 @@ The behavior extension owns a private profile, authenticated Xvfb display, sessi
 
 The initial application session must:
 
-1. Reveal **Skip setup** through its observed ShowOnScreen action or the unique onboarding scroll container, with at most four reveal actions, then complete setup through the visible, enabled ordinary button.
+1. Reveal **Skip setup** through its observed ShowOnScreen action or the unique onboarding scroll container using its observed forward `ScrollUp` action, with at most four reveal actions, then complete setup through the visible, enabled ordinary button.
 2. Show the desktop rail and exercise `Ctrl+1` through `Ctrl+6`, then `Alt+Left` and `Alt+Right`.
 3. Select **Desktop density → Compact** through the ordinary Options UI.
 4. Import the owned 180-second PCM WAV through the real file picker. Library and player state must be created by the application.
@@ -54,7 +54,9 @@ The observer retains flushed stage checkpoints and thirty-second stack-frame tra
 
 The AT-SPI client permits only state caching. Every node and immediate action validation clears that node's cache before reading its current native states. Subsequent flag membership examines that state snapshot; names, children and actions remain uncached. GNOME's [state-set implementation](https://raw.githubusercontent.com/GNOME/at-spi2-core/AT_SPI2_CORE_2_52_0/atspi/atspi-stateset.c) and [accessible cache implementation](https://raw.githubusercontent.com/GNOME/at-spi2-core/AT_SPI2_CORE_2_52_0/atspi/atspi-accessible.c) explain why a `NONE` mask can cause membership checks to issue additional native refresh calls. Native execution must still confirm the correction.
 
-Earlier runs against the original a1 candidate are retained as failures. Runs 37128932935 and 37130268349 timed out after ordinary app launch. Diagnostic run 37131470654 reached the first semantic node traversal and retained five stacks in `states.contains`; those Python frames do not establish the C-level cause or a product fault. The corrected candidate's native outcome is recorded separately.
+For the pinned Flutter framework, a normal vertical ListView advances through the semantic `ScrollUp` action. This follows the [exact framework action policy](https://raw.githubusercontent.com/flutter/flutter/ee80f08bbf97172ec030b8751ceab557177a34a6/packages/flutter/lib/src/widgets/scroll_position.dart) and [Linux adapter mapping](https://raw.githubusercontent.com/flutter/flutter/83675ed27633283e7fc296c8bca22e841224c096/engine/src/flutter/shell/platform/linux/fl_accessible_node.cc). The observer requires that actual capability on the unique container scoped to ordinary onboarding or Options labels, then checks fresh state before every action. It never taps an offscreen button.
+
+Earlier runs against the original a1 candidate are retained as failures. Runs 37128932935 and 37130268349 timed out after ordinary app launch. Diagnostic run 37131470654 reached the first semantic node traversal and retained five stacks in `states.contains`; those Python frames do not establish the C-level cause or a product fault. Run 37134370976 against the corrected 4b9 candidate completed 62 semantic tree traversals and retained the actual ordinary Welcome screenshot and 36-node tree. It failed with zero actions because the original selector requested `ScrollDown` while the onboarding list exposed only `ScrollUp`; all twelve owned processes and the private package/profile were cleaned up. This remains a failed behavior result. The revised direction test must establish actual reveal, visible Tap and the remaining native behavior.
 
 ## Remaining production scope
 

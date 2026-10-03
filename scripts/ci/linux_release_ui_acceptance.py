@@ -28,6 +28,9 @@ SCROLL_ACTIONS = frozenset(("ScrollLeft", "ScrollRight", "ScrollUp", "ScrollDown
 MAX_ONBOARDING_REVEALS = 4
 ONBOARDING_LABELS = frozenset(("Welcome to AetherTune", "Set up a local library", "Explore legal sources",
                               "Connect your music server", "Privacy first"))
+# Pinned Flutter semantics names finger motion: a normal, nonreversed vertical
+# ListView advances via ScrollUp (ScrollPosition._updateSemanticActions).
+FORWARD_LIST_ACTION = "ScrollUp"
 
 
 def timestamp():
@@ -127,14 +130,14 @@ def onboarding_target(nodes):
     # capability to two distinct visible headings/cards from exact English l10n.
     scrolls = []
     for candidate in nodes:
-        if not actionable(candidate, "ScrollDown"):
+        if not actionable(candidate, FORWARD_LIST_ACTION):
             continue
         labels = {label for child in nodes if child["path"] != candidate["path"]
                   and descendant(child, candidate) and available(child)
                   for label in ONBOARDING_LABELS if name_line(child["name"], label)}
         if len(labels) >= 2:
             scrolls.append(candidate)
-    return unique(scrolls, "onboarding ScrollDown container bound to visible setup labels"), "ScrollDown"
+    return unique(scrolls, f"onboarding {FORWARD_LIST_ACTION} container bound to visible setup labels"), FORWARD_LIST_ACTION
 
 
 def seek_slider(nodes):
@@ -442,7 +445,7 @@ class Observer:
                 self.act("Desktop density", "ShowOnScreen", predicate=lambda n, ns:
                          "Desktop density" in n["name"] and n["path"] == unique(show, "density ShowOnScreen")["path"])
             else:
-                self.act("Options list scroll", "ScrollDown", predicate=lambda n, ns: any(
+                self.act("Options list scroll", FORWARD_LIST_ACTION, predicate=lambda n, ns: any(
                     descendant(child, n) and name_line(child["name"], "Options") for child in ns))
             time.sleep(0.4)
         if initial:

@@ -18,7 +18,95 @@ def node(path, name="", role="panel", states=("VISIBLE", "SHOWING", "ENABLED"), 
     return {"path": tuple(path), "name": name, "role": role, "states": list(states), "actions": list(actions)}
 
 
+# Exact 36-node ordinary native failure tree, run37134370976/artifact11278660508.
+# Captured executor d4a9db4; raw tree SHA256 d5e035e4b9ac74b09715b4732a502318ad28891a3b8cf4a80f75f11eec8e1d1d.
+# This retained observation is not a positive native action result.
+ACTUAL_ONBOARDING_TREE_SHA256 = '09c30142ab45ccdbc537b5cc4beae647895efbf3a352a522f5082959c99993d3'
+ACTUAL_ONBOARDING_TREE_JSON = r'''[
+{"actions": [], "name": "dev.aethertune.aethertune", "path": [], "role": "application", "states": []},
+{"actions": [], "name": "aethertune", "path": [0], "role": "frame", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "FOCUSED"]},
+{"actions": [], "name": "", "path": [0, 0, 0], "role": "filler", "states": []},
+{"actions": [], "name": "", "path": [0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING", "FOCUSED"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["ScrollUp"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "AetherTune", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Welcome to AetherTune", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Start with music you control, or choose a legal source. You can change every choice later in Options.", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Set up a local library\nImport audio files or a folder, then keep watched folders in sync while the app is open.", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Import audio", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Explore legal sources\nAdd podcast RSS feeds, browse Radio Browser, Internet Archive, or connect your own supported media server.", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Open Sources", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Connect your music server\nAdd a Jellyfin or Navidrome / Subsonic library using a secure, tested connection.", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Connect server", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11], "role": "panel", "states": ["SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12], "role": "panel", "states": ["SHOWING"]},
+{"actions": [], "name": "Privacy first\nAetherTune has no telemetry. Network providers disclose the domains they contact before use.", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 0], "role": "panel", "states": ["SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Start at Home", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0], "role": "push button", "states": ["SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 13], "role": "panel", "states": ["SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14], "role": "panel", "states": ["SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Skip setup", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 14, 0], "role": "push button", "states": ["SHOWING", "ENABLED", "SENSITIVE"]}
+]'''
+
+
 class ObserverGuards(unittest.TestCase):
+    def test_actual_36_node_onboarding_tree_selects_forward_scroll_without_hidden_tap(self):
+        nodes = json.loads(ACTUAL_ONBOARDING_TREE_JSON)
+        canonical = json.dumps(nodes, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), ACTUAL_ONBOARDING_TREE_SHA256)
+        self.assertEqual(len(nodes), 36)
+        skip = ui.unique([n for n in nodes if n["name"] == "Skip setup"], "captured Skip setup")
+        self.assertEqual(set(skip["states"]), {"SHOWING", "ENABLED", "SENSITIVE"})
+        self.assertFalse(ui.actionable(skip, "Tap"))
+        self.assertNotIn("ShowOnScreen", skip["actions"])
+        target, action = ui.onboarding_target(nodes)
+        self.assertEqual(target["path"], [0] * 11)
+        self.assertEqual(target["actions"], ["ScrollUp"])
+        self.assertEqual(action, "ScrollUp")
+        # The backward action is not a permitted substitute for forward reveal.
+        wrong_direction = [dict(n, actions=["ScrollDown"]) if n is target else n for n in nodes]
+        with self.assertRaises(RuntimeError):
+            ui.onboarding_target(wrong_direction)
+
+    def test_density_requests_observed_forward_scroll_bound_to_options_list(self):
+        observer = object.__new__(ui.Observer)
+        advanced, actions = [False], []
+        scroll = node((0, 0), states=("VISIBLE", "SHOWING"), actions=("ScrollUp",))
+        title = node((0, 0, 0), "Options")
+        compact = node((0, 0, 1), "Compact", actions=("Tap",))
+        unrelated = node((0, 1), states=("VISIBLE", "SHOWING"), actions=("ScrollUp",))
+        observer.nav = lambda index: self.assertEqual(index, 5)
+        observer.tree = lambda identity=None: [scroll, title, unrelated] + ([compact] if advanced[0] else [])
+        def act(label, action="Tap", identity=None, predicate=None):
+            self.assertEqual((label, action), ("Options list scroll", "ScrollUp"))
+            self.assertTrue(ui.actionable(scroll, action))
+            self.assertTrue(predicate(scroll, observer.tree()))
+            self.assertFalse(predicate(unrelated, observer.tree()))
+            actions.append(action)
+            advanced[0] = True
+        observer.act = act
+        observer.find = lambda label: ui.unique([n for n in observer.tree()
+            if ui.actionable(n, "Tap") and ui.name_line(n["name"], label)], "model density control")
+        observer.wait = lambda predicate, label: predicate()
+        observer.record = lambda *args, **kwargs: None
+        observer.capture = lambda label: self.assertEqual(label, "compact")
+        with patch.object(ui.time, "sleep"):
+            observer.density(initial=False)
+        self.assertEqual(actions, ["ScrollUp"])
+
     def onboarding_model(self, reveal_action="ShowOnScreen", required_reveals=1):
         # Portable model of changing native state/actions; never native acceptance.
         status = {"reveals": 0, "actions": [], "events": [], "trees": 0, "pid": 12, "disabled": False}
@@ -61,8 +149,8 @@ class ObserverGuards(unittest.TestCase):
             if reveal_action == "ShowOnScreen" or visible():
                 values.append(node((0, 0), "Skip setup", states=native_states("Skip setup"),
                                    actions=("Tap", "ShowOnScreen")))
-            if reveal_action == "ScrollDown":
-                values.extend([node((0, 1), states=native_states("list"), actions=("ScrollDown",)),
+            if reveal_action == "ScrollUp":
+                values.extend([node((0, 1), states=native_states("list"), actions=("ScrollUp",)),
                                node((0, 1, 0), "Explore legal sources"),
                                node((0, 1, 1), "Connect your music server")])
             for value in values:
@@ -85,10 +173,10 @@ class ObserverGuards(unittest.TestCase):
                          [("clear", "Skip setup"), ("clear", "Skip setup")])
 
     def test_onboarding_lazy_skip_uses_only_scoped_observed_scroll(self):
-        observer, status = self.onboarding_model("ScrollDown")
+        observer, status = self.onboarding_model("ScrollUp")
         with patch.object(ui.time, "sleep"):
             observer.skip_onboarding()
-        self.assertEqual(status["actions"], ["ScrollDown", "Tap"])
+        self.assertEqual(status["actions"], ["ScrollUp", "Tap"])
         self.assertGreaterEqual(status["trees"], 5)
 
     def test_onboarding_final_tap_rejects_hidden_duplicate_introduced_during_capture(self):
@@ -111,9 +199,9 @@ class ObserverGuards(unittest.TestCase):
         self.assertEqual(status["actions"], [])
 
     def test_onboarding_rejects_unrelated_ambiguous_and_unusable_reveal_targets(self):
-        scroll = node((0, 0), states=("VISIBLE", "SHOWING"), actions=("ScrollDown",))
+        scroll = node((0, 0), states=("VISIBLE", "SHOWING"), actions=("ScrollUp",))
         headings = [node((0, 0, 0), "Welcome to AetherTune"), node((0, 0, 1), "Set up a local library")]
-        self.assertEqual(ui.onboarding_target([scroll, *headings]), (scroll, "ScrollDown"))
+        self.assertEqual(ui.onboarding_target([scroll, *headings]), (scroll, "ScrollUp"))
         cases = [[], [scroll, node((0, 0, 0), "Options"), node((0, 0, 1), "Library")],
                  [scroll, headings[0]], [scroll, dict(headings[0], path=(0, 0, 2)), headings[0]],
                  [scroll, *[dict(value, path=(0, 1, index)) for index, value in enumerate(headings)]],
@@ -132,19 +220,19 @@ class ObserverGuards(unittest.TestCase):
                                       scroll, *headings])
 
     def test_onboarding_reveal_budget_is_four_actions_without_hidden_tap(self):
-        observer, status = self.onboarding_model("ScrollDown", required_reveals=5)
+        observer, status = self.onboarding_model("ScrollUp", required_reveals=5)
         with patch.object(ui.time, "sleep"), self.assertRaisesRegex(RuntimeError, "reveal budget exhausted"):
             observer.skip_onboarding()
-        self.assertEqual(status["actions"], ["ScrollDown"] * ui.MAX_ONBOARDING_REVEALS)
+        self.assertEqual(status["actions"], ["ScrollUp"] * ui.MAX_ONBOARDING_REVEALS)
         self.assertNotIn(("capture", "onboarding"), status["events"])
 
     def test_onboarding_reveal_revalidates_new_ambiguity_identity_and_disabled_state(self):
-        observer, status = self.onboarding_model("ScrollDown")
+        observer, status = self.onboarding_model("ScrollUp")
         original_tree = observer.tree
         def changed_tree(identity=None):
             values = original_tree(identity)
             if status["trees"] >= 3:
-                values.extend([node((0, 2), states=("VISIBLE", "SHOWING"), actions=("ScrollDown",)),
+                values.extend([node((0, 2), states=("VISIBLE", "SHOWING"), actions=("ScrollUp",)),
                                node((0, 2, 0), "Welcome to AetherTune"),
                                node((0, 2, 1), "Set up a local library")])
             return values
@@ -357,10 +445,10 @@ class ObserverGuards(unittest.TestCase):
         # Actual pinned fl_accessible_node.cc mapping: None -> neither flag;
         # False -> SENSITIVE only; True -> SENSITIVE and ENABLED.
         undefined = node((0,), "Options list", states=("VISIBLE", "SHOWING"),
-                         actions=("ScrollDown", "ShowOnScreen", "Tap", "Increase", "Decrease"))
+                         actions=("ScrollUp", "ScrollDown", "ShowOnScreen", "Tap", "Increase", "Decrease"))
         disabled = dict(undefined, states=["VISIBLE", "SHOWING", "SENSITIVE"])
         enabled = dict(undefined, states=["VISIBLE", "SHOWING", "SENSITIVE", "ENABLED"])
-        for action in ("ScrollDown", "ShowOnScreen"):
+        for action in ("ScrollUp", "ScrollDown", "ShowOnScreen"):
             self.assertTrue(ui.actionable(undefined, action))
             self.assertFalse(ui.actionable(disabled, action))
             self.assertTrue(ui.actionable(enabled, action))
