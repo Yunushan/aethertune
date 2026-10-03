@@ -31,6 +31,8 @@ ONBOARDING_LABELS = frozenset(("Welcome to AetherTune", "Set up a local library"
 # Pinned Flutter semantics names finger motion: a normal, nonreversed vertical
 # ListView advances via ScrollUp (ScrollPosition._updateSemanticActions).
 FORWARD_LIST_ACTION = "ScrollUp"
+DENSITY_TITLE = "Desktop density"
+DENSITY_SUBTITLE = "Choose how much space desktop controls and lists use."
 
 
 def timestamp():
@@ -113,6 +115,41 @@ def selected_destination(nodes, destination):
 
 def descendant(node, ancestor):
     return node["path"][:len(ancestor["path"])] == ancestor["path"]
+
+
+def density_row(nodes, value):
+    require(value in ("Comfortable", "Compact"), "Unexpected desktop density value")
+    require(not any(n["name"] == "Popup menu" for n in nodes), "Density popup has not dismissed")
+    chosen = unique([n for n in nodes if name_line(n["name"], DENSITY_TITLE)], "ordinary desktop density row")
+    require(chosen["name"].splitlines() == [DENSITY_TITLE, DENSITY_SUBTITLE, value] and
+            chosen["role"] == "push button" and actionable(chosen, "Tap"),
+            "Ordinary desktop density row differs or is not actionable")
+    return chosen
+
+
+def density_popup_choice(nodes):
+    # Pinned DropdownMenuItem adds InkWell/Tap only when enabled, but does not
+    # set enabled semantics. Permit that unspecified state only in this exact
+    # two-choice popup, opened through the observed ordinary density row.
+    popup = unique([n for n in nodes if n["name"] == "Popup menu"], "density Popup menu")
+    require(popup["role"] == "panel" and available(popup), "Density popup is hidden, defunct or has another role")
+    choices = [n for n in nodes if n["path"] != popup["path"] and descendant(n, popup) and
+               (n["role"] == "push button" or "Tap" in n["actions"])]
+    require(len(choices) == 2, "Density popup must contain exactly two choices")
+    comfortable = unique([n for n in nodes if n["name"] == "Comfortable"], "Comfortable density popup choice")
+    compact = unique([n for n in nodes if n["name"] == "Compact"], "Compact density popup choice")
+    require(comfortable in choices and compact in choices, "Density popup choice belongs to another scope")
+    require(comfortable["path"] != compact["path"] and comfortable["path"][:-1] == compact["path"][:-1],
+            "Density popup choices are not distinct siblings")
+    parent = unique([n for n in nodes if n["path"] == compact["path"][:-1]], "density popup choice parent")
+    require(parent["role"] == "panel" and available(parent) and descendant(parent, popup),
+            "Density popup choice parent differs")
+    for choice in choices:
+        require(choice["role"] == "push button" and available(choice) and
+                len(choice["actions"]) == 2 and set(choice["actions"]) == {"Tap", "Focus"} and not (
+                    "SENSITIVE" in choice["states"] and "ENABLED" not in choice["states"]),
+                "Density popup choice is disabled, hidden, defunct or lacks its observed capabilities")
+    return compact
 
 
 def onboarding_target(nodes):
@@ -360,24 +397,34 @@ class Observer:
             time.sleep(0.25)
         raise RuntimeError(f"Timed out waiting for {label}: {last or 'predicate remained false'}")
 
-    def find(self, label, action="Tap", identity=None, predicate=None):
+    def find(self, label, action="Tap", identity=None, predicate=None, density_popup=False):
+        if density_popup:
+            require(label == "Compact" and action == "Tap" and identity is None and predicate is None and
+                    getattr(self, "_density_popup_opened", False), "Density popup action lacks its ordinary row opening")
         nodes = self.tree(identity)
+        if density_popup:
+            return density_popup_choice(nodes)
         matches = [n for n in nodes if actionable(n, action) and
                    (predicate(n, nodes) if predicate else name_line(n["name"], label))]
         return unique(matches, f"fresh actionable {label}")
 
-    def act(self, label, action="Tap", identity=None, predicate=None):
+    def act(self, label, action="Tap", identity=None, predicate=None, density_popup=False):
         # Resolve immediately before action; never reuse an accessible from an
         # earlier navigation state or a saved tree dump.
-        node = self.find(label, action, identity, predicate)
+        if density_popup:
+            node = self.find(label, action, identity, predicate, density_popup=True)
+        else:
+            node = self.find(label, action, identity, predicate)
         self.bound()
         accessible = node["accessible"]
         accessible.clear_cache_single()
         require(accessible.get_process_id() == (identity or self.app)["pid"], "Action PID binding changed")
         require(accessible.get_name() == node["name"], "Action semantic label changed")
+        if density_popup:
+            require(accessible.get_role_name() == "push button", "Density popup action role changed")
         states = accessible.get_state_set()
         enabled = states.contains(self.atspi.StateType.ENABLED) or (
-            supports_unset_enabled(node, action) and not states.contains(self.atspi.StateType.SENSITIVE))
+            (supports_unset_enabled(node, action) or density_popup) and not states.contains(self.atspi.StateType.SENSITIVE))
         require(enabled and not states.contains(self.atspi.StateType.DEFUNCT),
                 "Action state changed to disabled or defunct")
         if action != "ShowOnScreen":
@@ -385,8 +432,12 @@ class Observer:
                     "Action state changed to hidden")
         interface = accessible.get_action_iface()
         names = [interface.get_action_name(i) for i in range(interface.get_n_actions())]
+        if density_popup:
+            require(len(names) == 2 and set(names) == {"Tap", "Focus"}, "Density popup action capabilities changed")
         index = unique([i for i, name in enumerate(names) if name == action], "observed named action index")
         require(interface.do_action(index), f"Observed {action} action was rejected")
+        if density_popup:
+            self._density_popup_opened = False
         self.record("actions", label, action=action, target=self.describe(node))
 
     def capture(self, label, window=None):
@@ -435,9 +486,11 @@ class Observer:
         # has not exposed this row, scroll only its observed Options list.
         for _ in range(4):
             nodes = self.tree()
-            controls = [n for n in nodes if actionable(n, "Tap") and name_line(n["name"], "Compact" if not initial else "Comfortable")]
+            value = "Comfortable" if initial else "Compact"
+            controls = [n for n in nodes if actionable(n, "Tap") and
+                        n["name"].splitlines() == [DENSITY_TITLE, DENSITY_SUBTITLE, value]]
             if controls:
-                unique(controls, "desktop density dropdown")
+                density_row(nodes, value)
                 break
             labels = [n for n in nodes if "Desktop density" in n["name"]]
             show = [n for n in labels if "ShowOnScreen" in n["actions"]]
@@ -449,10 +502,12 @@ class Observer:
                     descendant(child, n) and name_line(child["name"], "Options") for child in ns))
             time.sleep(0.4)
         if initial:
-            self.act("Comfortable")
-            self.wait(lambda: self.find("Compact"), "Compact dropdown menu choice")
-            self.act("Compact")
-        node = self.wait(lambda: self.find("Compact"), "Compact desktop density ordinary setting")
+            self.act("Comfortable", predicate=lambda n, ns: n["path"] == density_row(ns, "Comfortable")["path"])
+            self._density_popup_opened = True
+            self.wait(lambda: self.find("Compact", density_popup=True), "Compact dropdown menu choice")
+            self.capture("density-popup")
+            self.act("Compact", density_popup=True)
+        node = self.wait(lambda: density_row(self.tree(), "Compact"), "Compact desktop density ordinary setting")
         self.record("observations", "Compact desktop density", target=self.describe(node), restored=not initial)
         self.capture("compact")
 

@@ -62,7 +62,224 @@ ACTUAL_ONBOARDING_TREE_JSON = r'''[
 ]'''
 
 
+# Exact 14-node ordinary density popup, run37139369194/artifact11279933109.
+# Raw SHA256 fd1918dc9efeb40382f28c8d21793a5b03c0b7c417c300bdd8da0dc7448ff7c8.
+# This captured failed wait does not establish a native Compact action result.
+ACTUAL_DENSITY_POPUP_SHA256 = '8684763d7739a2fa183682f2165c572b14f0739d5447c10d5f59b304c3683feb'
+ACTUAL_DENSITY_POPUP_JSON = r'''[
+{"actions": [], "name": "dev.aethertune.aethertune", "path": [], "role": "application", "states": []},
+{"actions": [], "name": "aethertune", "path": [0], "role": "frame", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "FOCUSED"]},
+{"actions": [], "name": "", "path": [0, 0, 0], "role": "filler", "states": []},
+{"actions": [], "name": "", "path": [0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Popup menu", "path": [0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Comfortable", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "FOCUSED"]},
+{"actions": ["Tap", "Focus"], "name": "Compact", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "push button", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]}
+]'''
+ACTUAL_DENSITY_OPENING_JSON = r'''{"actions": ["Tap", "Focus"], "name": "Desktop density\nChoose how much space desktop controls and lists use.\nComfortable", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 9], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}'''
+
+
 class ObserverGuards(unittest.TestCase):
+    def density_model(self):
+        # Real observer density/find/act paths against captured semantics and a
+        # changing native-call model. No application process/storage is involved.
+        observer = object.__new__(ui.Observer)
+        status = {"phase": "row", "actions": [], "captures": [], "events": [], "trees": 0,
+                  "popup_change": None, "native_states": None, "native_pid": 12,
+                  "native_role": "push button", "native_actions": ["Tap", "Focus"],
+                  "native_name": "Compact", "keep_popup": False, "opening_change": None}
+        observer.app, observer.deadline = {"pid": 12}, float("inf")
+        observer.report = {"actions": [], "observations": []}
+        observer.bound = lambda: None
+        observer.nav = lambda index: self.assertEqual(index, 5)
+        observer.wait = lambda predicate, label: predicate()
+        observer.atspi = SimpleNamespace(StateType=SimpleNamespace(**{name: name for name in
+            ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "DEFUNCT")}))
+        def capture(label):
+            status["captures"].append(label)
+        observer.capture = capture
+        def accessible(value):
+            is_popup_choice = value["name"] == "Compact"
+            def fresh_states():
+                status["events"].append(("state", value["name"]))
+                snapshot = frozenset(status["native_states"] if is_popup_choice and
+                    status["native_states"] is not None else value["states"])
+                return SimpleNamespace(contains=lambda name: name in snapshot)
+            def interface():
+                names = status["native_actions"] if is_popup_choice else value["actions"]
+                def perform(index):
+                    self.assertEqual(names[index], "Tap")
+                    status["actions"].append(value["name"])
+                    if value["name"] == "Compact":
+                        status["phase"] = "popup" if status["keep_popup"] else "closed"
+                    else:
+                        self.assertEqual(value["name"].splitlines()[0], "Desktop density")
+                        status["phase"] = "popup"
+                    return True
+                return SimpleNamespace(get_n_actions=lambda: len(names),
+                    get_action_name=lambda index: names[index], do_action=perform)
+            return SimpleNamespace(clear_cache_single=lambda: status["events"].append(("clear", value["name"])),
+                get_process_id=lambda: status["native_pid"] if is_popup_choice else 12,
+                get_name=lambda: status["native_name"] if is_popup_choice else value["name"],
+                get_role_name=lambda: status["native_role"] if is_popup_choice else value["role"],
+                get_state_set=fresh_states, get_action_iface=interface)
+        def tree(identity=None):
+            self.assertIsNone(identity)
+            status["trees"] += 1
+            if status["phase"] == "popup":
+                values = json.loads(ACTUAL_DENSITY_POPUP_JSON)
+                if status["popup_change"]:
+                    status["popup_change"](values)
+            else:
+                value = json.loads(ACTUAL_DENSITY_OPENING_JSON)
+                if status["phase"] == "closed":
+                    value["name"] = value["name"].removesuffix("Comfortable") + "Compact"
+                if status["opening_change"]:
+                    status["opening_change"](value)
+                values = [value]
+            for value in values:
+                value["path"] = tuple(value["path"])
+                value["accessible"] = accessible(value)
+            return values
+        observer.tree = tree
+        return observer, status
+
+    def test_actual_14_node_density_popup_flow_uses_context_and_restored_strict_row(self):
+        nodes = json.loads(ACTUAL_DENSITY_POPUP_JSON)
+        self.assertEqual(len(nodes), 14)
+        canonical = json.dumps(nodes, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), ACTUAL_DENSITY_POPUP_SHA256)
+        compact = ui.unique([n for n in nodes if n["name"] == "Compact"], "captured Compact")
+        self.assertFalse(ui.actionable(compact, "Tap"), "Global Compact policy must stay strict")
+        observer, status = self.density_model()
+        observer.density(initial=True)
+        self.assertEqual(status["actions"], [json.loads(ACTUAL_DENSITY_OPENING_JSON)["name"], "Compact"])
+        self.assertEqual(status["captures"], ["density-popup", "compact"])
+        self.assertFalse(observer._density_popup_opened, "One popup opening permits only one accepted choice")
+        self.assertGreaterEqual(status["trees"], 5, "Action must rediscover the popup after capture")
+        self.assertEqual([event for event in status["events"] if event[1] == "Compact"],
+                         [("clear", "Compact"), ("state", "Compact")])
+        # Reopen observes only the strict persisted row; no popup permission or Tap.
+        observer.density(initial=False)
+        self.assertEqual(len(status["actions"]), 2)
+        self.assertTrue(observer.report["observations"][-1]["restored"])
+
+    def test_density_popup_rejects_disabled_hidden_defunct_ambiguous_or_misscoped_choices(self):
+        def change_choice(values, label, **changes):
+            ui.unique([n for n in values if n["name"] == label], label).update(changes)
+        variants = {
+            "disabled Compact": lambda v: change_choice(v, "Compact", states=["VISIBLE", "SHOWING", "SENSITIVE"]),
+            "disabled Comfortable": lambda v: change_choice(v, "Comfortable", states=["VISIBLE", "SHOWING", "SENSITIVE"]),
+            "hidden": lambda v: change_choice(v, "Compact", states=["SHOWING"]),
+            "not showing": lambda v: change_choice(v, "Compact", states=["VISIBLE"]),
+            "defunct": lambda v: change_choice(v, "Compact", states=["VISIBLE", "SHOWING", "DEFUNCT"]),
+            "wrong role": lambda v: change_choice(v, "Compact", role="panel"),
+            "wrong name": lambda v: change_choice(v, "Compact", name="Compact alias"),
+            "wrong path": lambda v: change_choice(v, "Compact", path=[99, 1]),
+            "not siblings": lambda v: change_choice(v, "Compact", path=[0] * 11 + [1]),
+            "missing Tap": lambda v: change_choice(v, "Compact", actions=["Focus"]),
+            "missing Focus": lambda v: change_choice(v, "Compact", actions=["Tap"]),
+            "duplicate Tap": lambda v: change_choice(v, "Compact", actions=["Tap", "Tap", "Focus"]),
+            "unrelated choice": lambda v: v.append(dict(node([0] * 10 + [2], "Other", role="push button",
+                actions=("Tap", "Focus")), path=[0] * 10 + [2])),
+            "duplicate hidden choice": lambda v: v.append(node([0] * 10 + [2], "Compact", role="push button", states=(), actions=("Tap", "Focus"))),
+            "foreign scope alias": lambda v: v.append(node([99], "Compact", role="push button", actions=("Tap", "Focus"))),
+            "duplicate popup": lambda v: v.append(node([99], "Popup menu", states=())),
+            "hidden popup": lambda v: change_choice(v, "Popup menu", states=["SHOWING"]),
+            "defunct popup": lambda v: change_choice(v, "Popup menu", states=["VISIBLE", "SHOWING", "DEFUNCT"]),
+            "wrong popup role": lambda v: change_choice(v, "Popup menu", role="dialog"),
+            "missing parent": lambda v: v.pop(10),
+            "defunct parent": lambda v: v[10].update(states=["VISIBLE", "SHOWING", "DEFUNCT"]),
+        }
+        for description, change in variants.items():
+            with self.subTest(description=description):
+                values = json.loads(ACTUAL_DENSITY_POPUP_JSON)
+                change(values)
+                with self.assertRaises(RuntimeError):
+                    ui.density_popup_choice(values)
+
+    def test_density_popup_requires_actual_row_opening_and_does_not_relax_global_tap(self):
+        observer, status = self.density_model()
+        status["phase"] = "popup"
+        with self.assertRaisesRegex(RuntimeError, "observed 0"):
+            observer.find("Compact")
+        with self.assertRaisesRegex(RuntimeError, "ordinary row opening"):
+            observer.act("Compact", density_popup=True)
+        observer._density_popup_opened = True
+        for keywords in ({"label": "Comfortable"}, {"label": "Compact", "action": "Focus"},
+                         {"label": "Compact", "identity": {"pid": 13}},
+                         {"label": "Compact", "predicate": lambda n, ns: True}):
+            with self.subTest(keywords=keywords), self.assertRaisesRegex(RuntimeError, "ordinary row opening"):
+                observer.act(**keywords, density_popup=True)
+        self.assertEqual(status["actions"], [])
+        observer, status = self.density_model()
+        status["opening_change"] = lambda n: n.update(name="Comfortable")
+        with self.assertRaises(RuntimeError), patch.object(ui.time, "sleep"):
+            observer.density(initial=True)
+        self.assertEqual(status["actions"], [], "An unrelated Comfortable control cannot arm popup permission")
+
+    def test_density_popup_reselects_entire_scope_after_capture_before_mutation(self):
+        for description, change in (
+            ("hidden duplicate choice", lambda v: v.append(node([99], "Compact", role="push button", states=(), actions=("Tap", "Focus")))),
+            ("duplicate popup", lambda v: v.append(node([99], "Popup menu", states=()))),
+            ("disabled sibling", lambda v: ui.unique([n for n in v if n["name"] == "Comfortable"], "sibling").update(
+                states=["VISIBLE", "SHOWING", "SENSITIVE"]))):
+            with self.subTest(description=description):
+                observer, status = self.density_model()
+                original_capture = observer.capture
+                def capture(label):
+                    original_capture(label)
+                    if label == "density-popup":
+                        status["popup_change"] = change
+                observer.capture = capture
+                with self.assertRaises(RuntimeError):
+                    observer.density(initial=True)
+                self.assertEqual(status["actions"], [json.loads(ACTUAL_DENSITY_OPENING_JSON)["name"]])
+                self.assertNotIn(("clear", "Compact"), status["events"], "Ambiguous scope reached native mutation validation")
+
+    def test_density_popup_immediate_native_revalidation_rejects_changed_identity_state_role_or_capability(self):
+        changes = {
+            "disabled": ("native_states", ["VISIBLE", "SHOWING", "SENSITIVE"]),
+            "hidden": ("native_states", ["SHOWING"]),
+            "defunct": ("native_states", ["VISIBLE", "SHOWING", "DEFUNCT"]),
+            "foreign PID": ("native_pid", 13), "changed role": ("native_role", "panel"),
+            "changed label": ("native_name", "Other"), "missing Tap": ("native_actions", ["Focus"]),
+            "missing Focus": ("native_actions", ["Tap"]), "duplicate Tap": ("native_actions", ["Tap", "Tap", "Focus"]),
+        }
+        for description, (key, value) in changes.items():
+            with self.subTest(description=description):
+                observer, status = self.density_model()
+                # The fresh tree remains valid; only the immediate native query changes.
+                status[key] = value
+                with self.assertRaises(RuntimeError):
+                    observer.density(initial=True)
+                self.assertEqual(status["actions"], [json.loads(ACTUAL_DENSITY_OPENING_JSON)["name"]])
+                self.assertIn(("clear", "Compact"), status["events"])
+
+    def test_density_requires_popup_dismissal_before_observing_normal_compact_row(self):
+        observer, status = self.density_model()
+        status["keep_popup"] = True
+        with self.assertRaisesRegex(RuntimeError, "popup has not dismissed"):
+            observer.density(initial=True)
+        self.assertEqual(len(status["actions"]), 2)
+        self.assertNotIn("compact", status["captures"])
+        self.assertFalse(observer._density_popup_opened)
+        row = json.loads(ACTUAL_DENSITY_OPENING_JSON)
+        row["name"] = row["name"].removesuffix("Comfortable") + "Compact"
+        self.assertIs(ui.density_row([row], "Compact"), row)
+        for changed in (dict(row, name="Compact"), dict(row, role="panel"),
+                        dict(row, states=["VISIBLE", "SHOWING", "SENSITIVE"]), dict(row, actions=[])):
+            with self.subTest(changed=changed), self.assertRaises(RuntimeError):
+                ui.density_row([changed], "Compact")
+        with self.assertRaises(RuntimeError):
+            ui.density_row([row, dict(row, path=[99])], "Compact")
+
     def test_actual_36_node_onboarding_tree_selects_forward_scroll_without_hidden_tap(self):
         nodes = json.loads(ACTUAL_ONBOARDING_TREE_JSON)
         canonical = json.dumps(nodes, sort_keys=True, separators=(",", ":")).encode()
@@ -86,7 +303,8 @@ class ObserverGuards(unittest.TestCase):
         advanced, actions = [False], []
         scroll = node((0, 0), states=("VISIBLE", "SHOWING"), actions=("ScrollUp",))
         title = node((0, 0, 0), "Options")
-        compact = node((0, 0, 1), "Compact", actions=("Tap",))
+        compact = node((0, 0, 1), "Desktop density\nChoose how much space desktop controls and lists use.\nCompact",
+                       role="push button", actions=("Tap",))
         unrelated = node((0, 1), states=("VISIBLE", "SHOWING"), actions=("ScrollUp",))
         observer.nav = lambda index: self.assertEqual(index, 5)
         observer.tree = lambda identity=None: [scroll, title, unrelated] + ([compact] if advanced[0] else [])
