@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:ui' show SemanticsAction;
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +24,104 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
+
+  for (final fullPlayer in <bool>[false, true]) {
+    testWidgets(
+      '${fullPlayer ? 'full' : 'mini'} player named semantics action updates Pause to Play',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1280, 900);
+        addTearDown(tester.view.reset);
+        final semantics = tester.ensureSemantics();
+        try {
+          final engine = _FakePlaybackAudioEngine();
+          final player = PlayerController(audioEngine: engine);
+          final library = LibraryStore();
+          await library.load();
+          addTearDown(player.dispose);
+          addTearDown(library.dispose);
+          final track = _track(
+            'semantics',
+            title: 'Semantics Song',
+            durationSeconds: 180,
+          );
+          await library.addTracks(<Track>[track]);
+          await player.playTrack(track, queue: <Track>[track]);
+          await tester.pumpWidget(
+            MultiProvider(
+              providers: [
+                ChangeNotifierProvider<LibraryStore>.value(value: library),
+                ChangeNotifierProvider<PlayerController>.value(value: player),
+              ],
+              child: MaterialApp(
+                home: fullPlayer
+                    ? NowPlayingScreen(onOpenQueue: () {}, onOpenLyrics: () {})
+                    : Scaffold(
+                        body: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: PlayerBar(
+                            onOpenNowPlaying: () {},
+                            onOpenQueue: () {},
+                            onSaveQueue: () {},
+                            onOpenLyrics: () {},
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          for (final label in <String>[
+            'Previous',
+            'Pause',
+            'Next',
+            if (!fullPlayer) ...[
+              'Lyrics',
+              'Edit queue',
+              'Save queue as playlist',
+            ],
+          ]) {
+            final data = tester
+                .getSemantics(_iconButtonWithTooltip(label))
+                .getSemanticsData();
+            expect(data.label, label);
+            expect(data.hasAction(SemanticsAction.tap), isTrue);
+            expect(data.flagsCollection.isEnabled, Tristate.isTrue);
+            expect(data.tooltip, isEmpty);
+          }
+          final pause = tester.getSemantics(_iconButtonWithTooltip('Pause'));
+          pause.owner!.performAction(pause.id, SemanticsAction.tap);
+          await tester.pumpAndSettle();
+          expect(engine.playingValue, isFalse);
+          final play = tester
+              .getSemantics(_iconButtonWithTooltip('Play'))
+              .getSemanticsData();
+          expect(play.label, 'Play');
+          expect(play.hasAction(SemanticsAction.tap), isTrue);
+          expect(_iconButtonWithTooltip('Pause'), findsNothing);
+          if (fullPlayer) {
+            final shuffle = tester.getSemantics(
+              find.byKey(const Key('now-playing-shuffle')),
+            );
+            expect(shuffle.getSemanticsData().label, 'Enable shuffle');
+            expect(
+              shuffle.getSemanticsData().flagsCollection.isSelected,
+              Tristate.isFalse,
+            );
+            shuffle.owner!.performAction(shuffle.id, SemanticsAction.tap);
+            await tester.pumpAndSettle();
+            final selected = tester
+                .getSemantics(find.byKey(const Key('now-playing-shuffle')))
+                .getSemanticsData();
+            expect(selected.label, 'Disable shuffle');
+            expect(selected.flagsCollection.isSelected, Tristate.isTrue);
+          }
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+  }
 
   testWidgets('full player exposes playback, queue, and library actions', (
     tester,
@@ -151,7 +249,7 @@ void main() {
       library.tracks.first.skipSegments.map((segment) => segment.label),
       contains('SponsorBlock: sponsor'),
     );
-    expect(find.byTooltip('Add to favorites'), findsOneWidget);
+    expect(_iconButtonWithTooltip('Add to favorites'), findsOneWidget);
 
     final semantics = tester.ensureSemantics();
     final artworkSemantics = tester.getSemantics(
@@ -327,7 +425,7 @@ void main() {
     await tester.ensureVisible(trackSpeedItem);
     await tester.tap(trackSpeedItem);
     await tester.pumpAndSettle();
-    final favoriteButton = find.byTooltip('Add to favorites');
+    final favoriteButton = _iconButtonWithTooltip('Add to favorites');
     final lyricsButton = find.widgetWithText(TextButton, 'Lyrics');
     final queueButton = find.widgetWithText(TextButton, 'Queue');
     await tester.ensureVisible(favoriteButton);
@@ -811,10 +909,10 @@ Recovered transcript
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.byTooltip('Lyrics'), findsNothing);
-    expect(find.byTooltip('Play'), findsNothing);
-    expect(find.byTooltip('Pause'), findsOneWidget);
-    expect(find.byTooltip('Next'), findsOneWidget);
+    expect(_iconButtonWithTooltip('Lyrics'), findsNothing);
+    expect(_iconButtonWithTooltip('Play'), findsNothing);
+    expect(_iconButtonWithTooltip('Pause'), findsOneWidget);
+    expect(_iconButtonWithTooltip('Next'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) =>
@@ -1018,6 +1116,11 @@ Recovered transcript
     },
   );
 }
+
+// Flutter's tooltip finder does not account for themed semantics exclusion.
+Finder _iconButtonWithTooltip(String label) => find.byWidgetPredicate(
+  (widget) => widget is IconButton && widget.tooltip == label,
+);
 
 Track _track(String id, {required String title, required int durationSeconds}) {
   return Track(

@@ -26,6 +26,14 @@ class AudioServiceMpris extends AudioServicePlatform {
   AudioHandlerCallbacks? _handlerCallbacks;
   bool _isPlaying = false;
 
+  AudioServiceMpris({OrgMprisMediaPlayer2? player}) {
+    if (player != null) {
+      _mpris = player;
+      _installSeekHandler();
+      _listenToRateStream();
+    }
+  }
+
   void _listenToOpenUriStream() {
     _mpris.openUriStream.listen((uri) {
       if (_handlerCallbacks == null) return;
@@ -34,12 +42,33 @@ class AudioServiceMpris extends AudioServicePlatform {
     });
   }
 
-  void _listenToSeekStream() {
-    _mpris.positionStream.listen((position) {
-      if (_handlerCallbacks == null) return;
-
-      _handlerCallbacks!.seek(SeekRequest(position: position));
-    });
+  void _installSeekHandler() {
+    _mpris.seekHandler = (position, mediaId) async {
+      final callbacks = _handlerCallbacks;
+      if (callbacks == null) throw StateError('No application handler');
+      final result = await callbacks.customAction(CustomActionRequest(
+        name: 'dbusSeek',
+        extras: {'mediaId': mediaId, 'positionUs': position.inMicroseconds},
+      ));
+      if (result is! Map ||
+          result['mediaId'] != mediaId ||
+          result['positionUs'] is! int ||
+          result['updateTimeUs'] is! int ||
+          result['playing'] is! bool ||
+          result['ready'] is! bool ||
+          result['speed'] is! num) {
+        throw StateError('Invalid application seek snapshot');
+      }
+      return MprisPlaybackSnapshot(
+        mediaId: mediaId,
+        position: Duration(microseconds: result['positionUs'] as int),
+        updateTime:
+            DateTime.fromMicrosecondsSinceEpoch(result['updateTimeUs'] as int),
+        playing: result['playing'] as bool,
+        ready: result['ready'] as bool,
+        speed: (result['speed'] as num).toDouble(),
+      );
+    };
   }
 
   void _listenToControlStream() {
@@ -122,8 +151,15 @@ class AudioServiceMpris extends AudioServicePlatform {
   }
 
   void _listenToRateStream() {
-    _mpris.rateStream.listen((value) {
-      _handlerCallbacks?.setSpeed(SetSpeedRequest(speed: value));
+    _mpris.rateStream.listen((value) async {
+      final callbacks = _handlerCallbacks;
+      if (callbacks == null) return;
+      try {
+        await callbacks.setSpeed(SetSpeedRequest(speed: value));
+      } catch (_) {
+        // Keep the last authoritative speed and observe callback rejection.
+        log('Application speed change failed', name: 'audio_service_mpris');
+      }
     });
   }
 
@@ -147,7 +183,7 @@ class AudioServiceMpris extends AudioServicePlatform {
         identity: request.config.androidNotificationChannelName);
 
     _listenToControlStream();
-    _listenToSeekStream();
+    _installSeekHandler();
     _listenToOpenUriStream();
     _listenToVolumeStream();
     _listenToTrackStream();
@@ -165,9 +201,18 @@ class AudioServiceMpris extends AudioServicePlatform {
 
   @override
   Future<void> setState(SetStateRequest request) async {
-    _mpris.position = request.state.updatePosition;
-    _isPlaying = request.state.playing;
-    _mpris.updateRate(request.state.speed);
+    final state = request.state;
+    _isPlaying = state.playing;
+    _mpris.updatePlayback(
+      position: state.updatePosition,
+      updateTime: state.updateTime,
+      playing: state.playing,
+      ready: state.processingState == AudioProcessingStateMessage.ready,
+      speed: state.speed,
+      stopped: state.processingState == AudioProcessingStateMessage.idle ||
+          state.processingState == AudioProcessingStateMessage.completed ||
+          state.processingState == AudioProcessingStateMessage.error,
+    );
     _mpris.updateLoopStatus(switch (request.state.repeatMode) {
       AudioServiceRepeatModeMessage.one => 'Track',
       AudioServiceRepeatModeMessage.all => 'Playlist',
@@ -176,7 +221,6 @@ class AudioServiceMpris extends AudioServicePlatform {
     _mpris.updateShuffle(
       request.state.shuffleMode != AudioServiceShuffleModeMessage.none,
     );
-    _mpris.playbackState = _isPlaying ? 'Playing' : 'Paused';
   }
 
   @override

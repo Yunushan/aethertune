@@ -57,8 +57,29 @@ void main() {
   test(
     'Player Seek applies a relative offset without seeking before zero',
     () async {
-      final player = OrgMprisMediaPlayer2(identity: 'AetherTune')
-        ..position = const Duration(seconds: 10);
+      final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
+      final metadata = Metadata(
+        trackId: mprisTrackPathForId('one'),
+        title: 'One',
+        length: const Duration(minutes: 3),
+      );
+      player.setTracks([MprisTrack(mediaId: 'one', metadata: metadata)]);
+      player.metadata = metadata;
+      player.updatePlayback(
+        position: const Duration(seconds: 10),
+        updateTime: DateTime.now(),
+        playing: false,
+        ready: true,
+        speed: 1,
+      );
+      player.seekHandler = (position, mediaId) async => MprisPlaybackSnapshot(
+        mediaId: mediaId,
+        position: position,
+        updateTime: DateTime.now(),
+        playing: false,
+        ready: true,
+        speed: 1,
+      );
 
       expectLater(
         player.positionStream,
@@ -93,6 +114,8 @@ void main() {
     final player = OrgMprisMediaPlayer2(identity: 'AetherTune');
     expectLater(player.rateStream, emits(1.5));
     await player.setRate(1.5);
+    expect(player.getRate().value, 1.0);
+    player.updateRate(1.5);
     expect(player.getRate().value, 1.5);
     await player.setRate(0);
     expect(player.getRate().value, 1.5);

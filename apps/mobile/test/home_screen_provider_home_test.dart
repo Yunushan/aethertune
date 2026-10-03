@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +36,40 @@ import 'package:aethertune/src/ui/home_screen.dart';
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
+  testWidgets('home import controls expose one explicit named action', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.reset);
+    final semantics = tester.ensureSemantics();
+    try {
+      final fixture = await _HomeFixture.create(
+        provider: _FakeProviderHomeCatalog(),
+      );
+      addTearDown(fixture.dispose);
+      await _pumpHome(tester, fixture);
+      for (final label in <String>[
+        'Import local audio',
+        'Import audio folder',
+      ]) {
+        final data = tester
+            .getSemantics(
+              find.byWidgetPredicate(
+                (widget) => widget is IconButton && widget.tooltip == label,
+              ),
+            )
+            .getSemanticsData();
+        expect(data.label, label);
+        expect(data.hasAction(SemanticsAction.tap), isTrue);
+        expect(data.flagsCollection.isEnabled, Tristate.isTrue);
+        expect(data.tooltip, isEmpty);
+      }
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets(

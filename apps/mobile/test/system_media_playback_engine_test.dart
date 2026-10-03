@@ -13,6 +13,186 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
 
 void main() {
+  test(
+    'runtime duration survives a repeated current index during seek',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+      delegate.emitDuration(const Duration(seconds: 180));
+      await engine.seek(const Duration(seconds: 12), index: 0);
+      expect(engine.mediaItem.value?.duration, const Duration(seconds: 180));
+      expect(engine.queue.value.single.duration, const Duration(seconds: 180));
+    },
+  );
+
+  test(
+    'runtime duration clears on actual index changes and explicit null',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[
+        _track('one'),
+        _track('two'),
+      ], initialIndex: 0);
+      delegate.emitDuration(const Duration(seconds: 180));
+      await engine.seek(Duration.zero, index: 1);
+      expect(engine.mediaItem.value?.id, 'two');
+      expect(engine.mediaItem.value?.duration, isNull);
+      delegate.emitDuration(const Duration(seconds: 90));
+      delegate.emitDuration(null);
+      expect(engine.mediaItem.value?.duration, isNull);
+      expect(engine.queue.value[1].duration, isNull);
+      delegate.emitDuration(const Duration(seconds: 90));
+      delegate._indexController.add(null);
+      expect(engine.mediaItem.value, isNull);
+      delegate._indexController.add(1);
+      expect(engine.mediaItem.value?.duration, isNull);
+    },
+  );
+
+  test(
+    'same index queue replacement and failed rollback cannot reuse runtime duration',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+      delegate.emitDuration(const Duration(seconds: 180));
+      await engine.setQueue(<Track>[
+        Track(
+          id: 'one',
+          title: 'Replacement',
+          artist: 'Artist',
+          localPath: '/music/replacement.wav',
+        ),
+      ], initialIndex: 0);
+      expect(engine.mediaItem.value?.duration, isNull);
+      delegate.emitDuration(const Duration(seconds: 90));
+      delegate.failQueue = true;
+      await expectLater(
+        engine.setQueue(<Track>[_track('two')], initialIndex: 0),
+        throwsStateError,
+      );
+      expect(engine.mediaItem.value?.id, 'one');
+      expect(engine.mediaItem.value?.duration, isNull);
+    },
+  );
+
+  test(
+    'dbusSeek awaits decoder and returns actual position instead of requested target',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[
+        _track('one', duration: const Duration(seconds: 180)),
+      ], initialIndex: 0);
+      delegate.emitProcessingState(ProcessingState.ready);
+      delegate.seekCompletion = Completer<void>();
+      delegate.confirmedSeekPosition = const Duration(seconds: 19);
+      var completed = false;
+      final before = DateTime.now().microsecondsSinceEpoch;
+      final pending = engine
+          .customAction('dbusSeek', <String, dynamic>{
+            'mediaId': 'one',
+            'positionUs': 20000000,
+          })
+          .then((value) {
+            completed = true;
+            return value;
+          });
+      await Future<void>.delayed(Duration.zero);
+      expect(completed, isFalse);
+      expect(delegate.position, Duration.zero);
+      delegate.seekCompletion!.complete();
+      final result = await pending as Map<String, dynamic>;
+      expect(result['positionUs'], 19000000);
+      expect(result['mediaId'], 'one');
+      expect(result['ready'], isTrue);
+      expect(result['playing'], isFalse);
+      expect(result['speed'], 1);
+      expect(result['updateTimeUs'], greaterThanOrEqualTo(before));
+      expect(
+        engine.playbackState.value.updatePosition,
+        const Duration(seconds: 19),
+      );
+    },
+  );
+
+  test(
+    'dbusSeek rejects stale identity and bounds before decoder dispatch',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[
+        _track('one', duration: const Duration(seconds: 180)),
+      ], initialIndex: 0);
+      for (final extras in <Map<String, dynamic>>[
+        {'mediaId': 'two', 'positionUs': 12000000},
+        {'mediaId': 'one', 'positionUs': -1},
+        {'mediaId': 'one', 'positionUs': 180000001},
+        {'mediaId': 'one', 'positionUs': 12.0},
+      ]) {
+        await expectLater(
+          engine.customAction('dbusSeek', extras),
+          throwsStateError,
+        );
+      }
+      expect(delegate.seekCalls, 0);
+    },
+  );
+
+  test(
+    'dbusSeek propagates decoder failure and rejects a track race after await',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final engine = SystemMediaPlaybackEngine(delegate);
+      addTearDown(engine.dispose);
+      await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+      delegate.seekCompletion = Completer<void>();
+      final failed = engine.customAction('dbusSeek', <String, dynamic>{
+        'mediaId': 'one',
+        'positionUs': 12000000,
+      });
+      final error = expectLater(failed, throwsStateError);
+      delegate.seekCompletion!.completeError(StateError('decoder failure'));
+      await error;
+      expect(delegate.position, Duration.zero);
+      delegate.seekCompletion = Completer<void>();
+      final pending = engine.customAction('dbusSeek', <String, dynamic>{
+        'mediaId': 'one',
+        'positionUs': 12000000,
+      });
+      final raced = expectLater(pending, throwsStateError);
+      await engine.setQueue(<Track>[_track('two')], initialIndex: 0);
+      delegate.seekCompletion!.complete();
+      await raced;
+      expect(engine.mediaItem.value?.id, 'two');
+      // Replacing a source with the same media id also invalidates an in-flight
+      // confirmation; an id match alone cannot bind the decoder generation.
+      delegate.seekCompletion = Completer<void>();
+      final sameId = engine.customAction('dbusSeek', <String, dynamic>{
+        'mediaId': 'two',
+        'positionUs': 12000000,
+      });
+      final replaced = expectLater(sameId, throwsStateError);
+      await engine.setQueue(<Track>[
+        Track(
+          id: 'two',
+          title: 'New source',
+          artist: 'Artist',
+          localPath: '/music/new-source.wav',
+        ),
+      ], initialIndex: 0);
+      delegate.seekCompletion!.complete();
+      await replaced;
+    },
+  );
+
   test('publishes queue metadata and current media item', () async {
     final delegate = _FakePlaybackAudioEngine();
     final engine = SystemMediaPlaybackEngine(delegate);
@@ -707,6 +887,10 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration bufferedPositionValue = Duration.zero;
   double volumeValue = 1;
   double speedValue = 1;
+  bool failQueue = false;
+  int seekCalls = 0;
+  Completer<void>? seekCompletion;
+  Duration? confirmedSeekPosition;
 
   @override
   Stream<Object?> get stateChanges => _stateController.stream;
@@ -757,6 +941,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     required int initialIndex,
     Duration initialPosition = Duration.zero,
   }) async {
+    if (failQueue) throw StateError('queue replacement failed');
     this.tracks = List<Track>.from(tracks);
     currentIndex = initialIndex;
     positionValue = initialPosition;
@@ -768,7 +953,7 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     _stateController.add(null);
   }
 
-  void emitDuration(Duration duration) {
+  void emitDuration(Duration? duration) {
     _durationController.add(duration);
   }
 
@@ -792,6 +977,9 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
 
   @override
   Future<void> seek(Duration position, {int? index}) async {
+    seekCalls++;
+    await seekCompletion?.future;
+    position = confirmedSeekPosition ?? position;
     positionValue = position;
     _positionController.add(position);
     if (index != null) {

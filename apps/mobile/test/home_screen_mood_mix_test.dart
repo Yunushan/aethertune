@@ -498,7 +498,11 @@ void main() {
       await player.playTrack(track);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Lyrics'));
+      await tester.tap(
+        find.byWidgetPredicate(
+          (widget) => widget is IconButton && widget.tooltip == 'Lyrics',
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Find in lyrics'));
       await tester.pumpAndSettle();

@@ -125,6 +125,7 @@ import 'youtube_followed_channel_feed_screen.dart';
 import 'youtube_account_library_screen.dart';
 import 'youtube_public_playlists_screen.dart';
 import 'theme_colors.dart';
+import 'widgets/accessible_icon_button.dart';
 import 'widgets/listening_recap_card.dart';
 import 'widgets/musicbrainz_metadata_search_sheet.dart';
 import 'widgets/artist_release_updates_shelf.dart';
@@ -1248,15 +1249,19 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(localizations.appTitle),
         actions: <Widget>[
-          IconButton(
-            tooltip: 'Import local audio',
-            onPressed: () => _importAudio(context),
-            icon: const Icon(Icons.library_add),
+          AccessibleIconButton(
+            button: IconButton(
+              tooltip: 'Import local audio',
+              onPressed: () => _importAudio(context),
+              icon: const Icon(Icons.library_add),
+            ),
           ),
-          IconButton(
-            tooltip: 'Import audio folder',
-            onPressed: () => _importAudioFolder(context),
-            icon: const Icon(Icons.create_new_folder_outlined),
+          AccessibleIconButton(
+            button: IconButton(
+              tooltip: 'Import audio folder',
+              onPressed: () => _importAudioFolder(context),
+              icon: const Icon(Icons.create_new_folder_outlined),
+            ),
           ),
           IconButton(
             tooltip: sleepTimerActive
