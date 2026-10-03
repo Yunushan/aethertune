@@ -427,13 +427,13 @@ class OrdinaryBehaviorTest(unittest.TestCase):
                "GITHUB_RUN_ID": "12", "GITHUB_RUN_ATTEMPT": "1"}
         receipt = {"schemaVersion": 1, "status": "verified-input", "product": {
             "repository": "Yunushan/aethertune", "sourceCommit": gate.PRODUCT_COMMIT, "sourceRef": gate.PRODUCT_REF,
-            "runId": 37130672909, "runAttempt": 1, "version": "0.1.0",
-            "artifact": {"id": 11277216890, "name": "aethertune-release-bundle", "outerSha256": "45556692c3d64e4f7890b7f9a3f4587e126d74cc54dfcd4188fb62ad5a491262"},
+            "runId": 37136816470, "runAttempt": 1, "version": "0.1.0",
+            "artifact": {"id": 11279990421, "name": "aethertune-release-bundle", "outerSha256": "8359e6c5f62a6afcb13931fb4c8f20fcdc35f9d6c249f228cb4f3b59b1b98065"},
             "linux": {"debSha256": gate.PRODUCT_DEB, "tarballSha256": gate.PRODUCT_TAR, "executableSha256": gate.PRODUCT_EXE, "bundleEntries": 43},
             "certificate": {"subjectAlternativeName": f"https://github.com/Yunushan/aethertune/.github/workflows/aethertune-release.yml@{gate.PRODUCT_REF}",
                 "issuer": "https://token.actions.githubusercontent.com", "buildSignerDigest": gate.PRODUCT_COMMIT,
                 "sourceRepositoryDigest": gate.PRODUCT_COMMIT, "sourceRepositoryRef": gate.PRODUCT_REF,
-                "runnerEnvironment": "github-hosted", "runInvocationURI": "https://github.com/Yunushan/aethertune/actions/runs/37130672909/attempts/1"}},
+                "runnerEnvironment": "github-hosted", "runInvocationURI": "https://github.com/Yunushan/aethertune/actions/runs/37136816470/attempts/1"}},
             "executor": {"repository": env["GITHUB_REPOSITORY"], "sourceCommit": "b" * 40, "triggerSha": env["GITHUB_SHA"],
                 "ref": env["GITHUB_REF"], "runId": 12, "runAttempt": 1, "driverHashes": drivers},
             "paths": {name: str(getattr(args, name).resolve()) for name in ("bundle", "deb", "tarball")}}

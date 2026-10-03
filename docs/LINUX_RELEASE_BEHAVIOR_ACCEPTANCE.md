@@ -4,12 +4,12 @@ This gate covers the ordinary installed Linux application: documented keyboard n
 
 ## Product and executor identity
 
-The dedicated `linux-release-behavior` workflow uses the verified nonpublishing candidate containing the accessible-control fixes:
+The dedicated `linux-release-behavior` workflow uses the verified nonpublishing candidate containing the accessible-control and desktop shortcut focus fixes:
 
-- Product commit: `4b9a309856ab028efc45d8a434ccaabda014e9c0`.
+- Product commit: `0aaaa5c52ceecb050b017abb21775d729a341419`.
 - Product ref: `refs/heads/codex/readiness-linux-behavior`.
-- Release run: `37130672909`, attempt `1`.
-- Release bundle artifact: `11277216890`.
+- Release run: `37136816470`, attempt `1`.
+- Release bundle artifact: `11279990421`.
 
 Preparation checks the official artifact metadata and ZIP digest, bounded archive paths, release checksums and manifest, and fresh GitHub attestation verification. It reconstructs the unchanged Linux bundle from its verified tar archive. The candidate's source-verifier hashes and Linux archive/executable hashes are retained.
 
@@ -58,7 +58,9 @@ For the pinned Flutter framework, a normal vertical ListView advances through th
 
 Earlier runs against the original a1 candidate are retained as failures. Runs 37128932935 and 37130268349 timed out after ordinary app launch. Diagnostic run 37131470654 reached the first semantic node traversal and retained five stacks in `states.contains`; those Python frames do not establish the C-level cause or a product fault. Run 37134370976 against the corrected 4b9 candidate completed 62 semantic tree traversals and retained the actual ordinary Welcome screenshot and 36-node tree. It failed with zero actions because the original selector requested `ScrollDown` while the onboarding list exposed only `ScrollUp`; all twelve owned processes and the private package/profile were cleaned up. This remains a failed behavior result. Run 37135431685 subsequently recorded the observed forward scroll, a visible and enabled Skip setup Tap, and arrival at Home. It then failed after sending the native Ctrl+2 chord because Library did not become selected. The two actual screenshots, action receipt, separate source identities and twelve owned cleanup outcomes were independently verified. Onboarding progress does not establish keyboard, playback, normal close or reopen acceptance; those gates still require a passing native result.
 
-The retained-focus transition is also reproduced by a headless Flutter regression: after setup finishes, the old outer focus node receives Ctrl+2 while the desktop shortcut callback remains outside its active focus ancestry. The desktop shortcut wrapper now provides a local FocusScope for its existing initial autofocus, without imperative focus requests. This source correction needs a rebuilt, verified candidate and fresh native keyboard acceptance; the existing 4b9 package contains the old focus behavior.
+The retained-focus transition is also reproduced by a headless Flutter regression: after setup finishes, the old outer focus node receives Ctrl+2 while the desktop shortcut callback remains outside its active focus ancestry. The desktop shortcut wrapper now provides a local FocusScope for its existing initial autofocus, without imperative focus requests. The source correction passed seven headless focus regressions, including editor focus, descendant handling and modal isolation/restoration. Automatic run 37136787480 still tested the old 4b9 package and repeated the Ctrl+2 failure; its 45 retained files and all twelve cleanup outcomes were independently verified. Its executor source cannot establish acceptance of the rebuilt product.
+
+Nonpublishing candidate run 37136816470 completed with thirteen successful jobs and publication skipped. Independent verification bound all nineteen official bundle files to eighteen signed subjects, the exact source/ref/run and hosted certificate, three deterministic SBOMs and the complete Linux TAR/DEB payload and modes. The ordinary package startup test mapped sixteen runtime modules to that payload, showed onboarding for fifteen seconds, closed through WM_DELETE with exit code 0, and removed all six owned process identities plus the package and private profile. Root and an independent reviewer viewed the actual onboarding screenshot. The gate now pins this verified rebuilt input; native keyboard, import, playback, two normal closes and same-profile reopen still require a passing fresh behavior result.
 
 ## Remaining production scope
 
