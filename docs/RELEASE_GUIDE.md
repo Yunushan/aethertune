@@ -111,9 +111,35 @@ The macOS ZIP and DMG packagers validate the app executable and Flutter asset
 manifest. The ZIP reopens the archive to verify both paths, while the DMG test
 mounts the volume to verify the bundle and its Applications shortcut.
 Candidate/manual macOS builds are unsigned. Production macOS builds require
-the Apple signing and notarization secrets, sign and notarize the app before
-packaging, staple and validate the DMG, and publish a deterministic
-`aethertune-macos-notarization.json` attestation. Production Windows MSIX and
+the Apple signing and notarization inputs, including a Developer ID distribution
+profile, its operator-reviewed SHA-256, expected Team ID and bundle ID. The
+profile bytes are pinned before signer use; decoded plist identity, validity,
+certificate and Keychain checks are supplementary policy. The reviewed hash
+records the approved input; it does not prove Apple authorized the profile.
+[Apple's DER profile and native execution rules](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles) remain authoritative.
+
+The signer embeds that profile and signs nested library/framework code inside out
+without entitlements, then applies the reviewed release capabilities to the main
+executable. It keeps the Data Protection Keychain and uses the profile's concrete
+`AppIdentifierPrefix.bundleID` Keychain group. Both executable architectures and
+nested libraries must report the expected Team, certificate and entitlements.
+The timestamped Developer ID DMG signature uses a distinct `.disk-image`
+identifier. App ZIP and DMG submissions require `Accepted` notary results;
+[stapler, codesign and native Gatekeeper assessments](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution) must also pass.
+
+The existing `aethertune-macos-notarization.json` is now schema v2, binding final
+ZIP/DMG hashes, embedded profile and executable/library hashes, per-architecture
+signing observations and accepted submission IDs/input hashes. Submission hashes
+are independently captured in signing evidence before submission: the app ZIP
+must first match its original signing receipt, and the DMG digest is recorded
+after native signing verification. Notarization rejects changed input bytes
+before submission and its server log must match that recorded digest. Submission
+hashes precede stapling; final package hashes follow it. The portable verifier checks
+this attested receipt's consistency and rejects legacy boolean-only receipts.
+This is not an independent Apple authorization or ordinary runtime proof.
+Ordinary installed launch, real Keychain roundtrips and continuity from a distinct
+previous production version remain required acceptance evidence. Fixture tests
+do not establish those properties. Production Windows MSIX and
 portable ZIP builds use the
 `AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_BASE64` and
 `AETHERTUNE_WINDOWS_SIGNING_CERTIFICATE_PASSWORD` secrets and are rejected by
@@ -258,6 +284,9 @@ job reads the following additional secrets from `production`:
   `AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64`,
   `AETHERTUNE_MACOS_SIGNING_CERTIFICATE_PASSWORD`,
   `AETHERTUNE_MACOS_SIGNING_IDENTITY`,
+  `AETHERTUNE_MACOS_PROVISIONING_PROFILE_BASE64`,
+  `AETHERTUNE_MACOS_PROVISIONING_PROFILE_SHA256`,
+  `AETHERTUNE_MACOS_TEAM_ID`, `AETHERTUNE_MACOS_BUNDLE_ID`,
   `AETHERTUNE_IOS_SIGNING_CERTIFICATE_BASE64`,
   `AETHERTUNE_IOS_SIGNING_CERTIFICATE_PASSWORD`, and
   `AETHERTUNE_IOS_SIGNING_IDENTITY`

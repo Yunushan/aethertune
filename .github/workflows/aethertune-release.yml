@@ -375,6 +375,10 @@ jobs:
           MACOS_CERTIFICATE_BASE64: ${{ secrets.AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           MACOS_SIGNING_IDENTITY: ${{ secrets.AETHERTUNE_MACOS_SIGNING_IDENTITY }}
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.AETHERTUNE_MACOS_PROVISIONING_PROFILE_BASE64 }}
+          MACOS_PROVISIONING_PROFILE_SHA256: ${{ secrets.AETHERTUNE_MACOS_PROVISIONING_PROFILE_SHA256 }}
+          MACOS_TEAM_ID: ${{ secrets.AETHERTUNE_MACOS_TEAM_ID }}
+          MACOS_BUNDLE_ID: ${{ secrets.AETHERTUNE_MACOS_BUNDLE_ID }}
           IOS_CERTIFICATE_BASE64: ${{ secrets.AETHERTUNE_IOS_SIGNING_CERTIFICATE_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.AETHERTUNE_IOS_SIGNING_CERTIFICATE_PASSWORD }}
           IOS_SIGNING_IDENTITY: ${{ secrets.AETHERTUNE_IOS_SIGNING_IDENTITY }}
@@ -389,6 +393,10 @@ jobs:
           : "${MACOS_CERTIFICATE_BASE64:?AETHERTUNE_MACOS_SIGNING_CERTIFICATE_BASE64 is required}"
           : "${MACOS_CERTIFICATE_PASSWORD:?AETHERTUNE_MACOS_SIGNING_CERTIFICATE_PASSWORD is required}"
           : "${MACOS_SIGNING_IDENTITY:?AETHERTUNE_MACOS_SIGNING_IDENTITY is required}"
+          : "${MACOS_PROVISIONING_PROFILE_BASE64:?AETHERTUNE_MACOS_PROVISIONING_PROFILE_BASE64 is required}"
+          : "${MACOS_PROVISIONING_PROFILE_SHA256:?AETHERTUNE_MACOS_PROVISIONING_PROFILE_SHA256 is required}"
+          : "${MACOS_TEAM_ID:?AETHERTUNE_MACOS_TEAM_ID is required}"
+          : "${MACOS_BUNDLE_ID:?AETHERTUNE_MACOS_BUNDLE_ID is required}"
           : "${IOS_CERTIFICATE_BASE64:?AETHERTUNE_IOS_SIGNING_CERTIFICATE_BASE64 is required}"
           : "${IOS_CERTIFICATE_PASSWORD:?AETHERTUNE_IOS_SIGNING_CERTIFICATE_PASSWORD is required}"
           : "${IOS_SIGNING_IDENTITY:?AETHERTUNE_IOS_SIGNING_IDENTITY is required}"
@@ -397,6 +405,17 @@ jobs:
           : "${NOTARY_API_KEY_BASE64:?AETHERTUNE_APPLE_NOTARY_API_KEY_BASE64 is required}"
           : "${NOTARY_KEY_ID:?AETHERTUNE_APPLE_NOTARY_KEY_ID is required}"
           : "${NOTARY_ISSUER_ID:?AETHERTUNE_APPLE_NOTARY_ISSUER_ID is required}"
+
+          macos_profile_path="$RUNNER_TEMP/aethertune-macos.provisionprofile"
+          printf '%s' "$MACOS_PROVISIONING_PROFILE_BASE64" | base64 -D > "$macos_profile_path"
+          python3 - "$macos_profile_path" "$MACOS_PROVISIONING_PROFILE_SHA256" "$MACOS_TEAM_ID" "$MACOS_BUNDLE_ID" <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts/ci')
+          from macos_signing_contract import identity, validate_profile_input
+          validate_profile_input(Path(sys.argv[1]).read_bytes(), sys.argv[2])
+          identity(sys.argv[3], sys.argv[4])
+          PY
 
           keychain_path="$RUNNER_TEMP/aethertune-signing.keychain-db"
           export AETHERTUNE_APPLE_KEYCHAIN_PATH="$keychain_path"
@@ -430,6 +449,10 @@ jobs:
           {
             printf 'AETHERTUNE_APPLE_KEYCHAIN_PATH=%s\n' "$keychain_path"
             printf 'AETHERTUNE_MACOS_SIGNING_IDENTITY=%s\n' "$MACOS_SIGNING_IDENTITY"
+            printf 'AETHERTUNE_MACOS_PROVISIONING_PROFILE_PATH=%s\n' "$macos_profile_path"
+            printf 'AETHERTUNE_MACOS_PROVISIONING_PROFILE_SHA256=%s\n' "$MACOS_PROVISIONING_PROFILE_SHA256"
+            printf 'AETHERTUNE_MACOS_TEAM_ID=%s\n' "$MACOS_TEAM_ID"
+            printf 'AETHERTUNE_MACOS_BUNDLE_ID=%s\n' "$MACOS_BUNDLE_ID"
             printf 'AETHERTUNE_IOS_SIGNING_IDENTITY=%s\n' "$IOS_SIGNING_IDENTITY"
             printf 'AETHERTUNE_IOS_PROVISIONING_PROFILE_PATH=%s\n' "$profile_path"
             printf 'AETHERTUNE_IOS_EXPORT_OPTIONS_PATH=%s\n' "$export_options"
@@ -511,14 +534,17 @@ jobs:
           bash scripts/ci/sign_macos_app.sh "$app_bundle" "$AETHERTUNE_MACOS_SIGNING_IDENTITY"
           notarization_zip="$RUNNER_TEMP/aethertune-macos-notarization.zip"
           ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$notarization_zip"
-          xcrun notarytool submit "$notarization_zip" \
-            --key "$AETHERTUNE_NOTARY_KEY_PATH" \
-            --key-id "$AETHERTUNE_NOTARY_KEY_ID" \
-            --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
-            --wait
+          python3 scripts/ci/macos_signing_contract.py bind-app-input \
+            --archive "$notarization_zip" --signing-receipt "$RUNNER_TEMP/aethertune-macos-signing.json"
+          python3 scripts/ci/macos_signing_contract.py notarize \
+            --artifact "$notarization_zip" --key "$AETHERTUNE_NOTARY_KEY_PATH" \
+            --key-id "$AETHERTUNE_NOTARY_KEY_ID" --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
+            --signing-receipt "$RUNNER_TEMP/aethertune-macos-signing.json" \
+            --output "$RUNNER_TEMP/aethertune-macos-app-notarization.json"
           xcrun stapler staple "$app_bundle"
           xcrun stapler validate "$app_bundle"
           codesign --verify --deep --strict --verbose=2 "$app_bundle"
+          spctl --assess --type execute --verbose=2 "$app_bundle"
 
       - name: Package macOS desktop app
         if: matrix.target == 'macos'
@@ -557,15 +583,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          xcrun notarytool submit release/aethertune-macos.dmg \
-            --key "$AETHERTUNE_NOTARY_KEY_PATH" \
-            --key-id "$AETHERTUNE_NOTARY_KEY_ID" \
-            --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
-            --wait
+          python3 scripts/ci/macos_signing_contract.py sign-dmg \
+            --image release/aethertune-macos.dmg --identity "$AETHERTUNE_MACOS_SIGNING_IDENTITY" \
+            --keychain "$AETHERTUNE_APPLE_KEYCHAIN_PATH" \
+            --team "$AETHERTUNE_MACOS_TEAM_ID" --bundle "$AETHERTUNE_MACOS_BUNDLE_ID" \
+            --output "$RUNNER_TEMP/aethertune-macos-dmg-signing.json"
+          python3 scripts/ci/macos_signing_contract.py notarize \
+            --artifact release/aethertune-macos.dmg --key "$AETHERTUNE_NOTARY_KEY_PATH" \
+            --key-id "$AETHERTUNE_NOTARY_KEY_ID" --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
+            --signing-receipt "$RUNNER_TEMP/aethertune-macos-dmg-signing.json" \
+            --output "$RUNNER_TEMP/aethertune-macos-dmg-notarization.json"
           xcrun stapler staple release/aethertune-macos.dmg
           xcrun stapler validate release/aethertune-macos.dmg
-          spctl --assess --type open --verbose=2 release/aethertune-macos.dmg
-          printf '%s\n' '{"app_archive":"aethertune-macos.zip","disk_image":"aethertune-macos.dmg","notarized":true,"schema_version":1,"stapled":true}' > release/aethertune-macos-notarization.json
+          codesign --verify --strict --verbose=2 release/aethertune-macos.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=2 release/aethertune-macos.dmg
+          python3 scripts/ci/macos_signing_contract.py finalize \
+            --release-dir release --signing-receipt "$RUNNER_TEMP/aethertune-macos-signing.json" \
+            --dmg-signing-receipt "$RUNNER_TEMP/aethertune-macos-dmg-signing.json" \
+            --app-notarization-receipt "$RUNNER_TEMP/aethertune-macos-app-notarization.json" \
+            --dmg-notarization-receipt "$RUNNER_TEMP/aethertune-macos-dmg-notarization.json"
 
       - name: Verify macOS production artifact evidence
         if: matrix.target == 'macos' && vars.AETHERTUNE_PRODUCTION_RELEASES_ENABLED == 'true'

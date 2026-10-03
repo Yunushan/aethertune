@@ -35,17 +35,45 @@ jobs:
         run: |
           set -euo pipefail
           : "${ALERT_WEBHOOK_URL:?AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL is required for probe failure alerts}"
-          case "$ALERT_WEBHOOK_URL" in
-            https://*) ;;
-            *) echo 'AETHERTUNE_PRODUCTION_ALERT_WEBHOOK_URL must use HTTPS.' >&2; exit 1 ;;
-          esac
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+
+          url = os.environ["ALERT_WEBHOOK_URL"]
+          try:
+              parsed = urlsplit(url)
+              valid = (url.startswith("https://") and parsed.scheme == "https"
+                       and bool(parsed.hostname)
+                       and not any(ord(char) <= 32 or ord(char) == 127 for char in url))
+              parsed.port  # Reject malformed ports without printing the private URL.
+          except ValueError:
+              valid = False
+          if not valid:
+              raise SystemExit("Alert webhook must use HTTPS with a valid host and no whitespace or control characters.")
+          PY
 
       - name: Send off-host alert
         shell: bash
         run: |
           set -euo pipefail
           payload="$(python3 -c 'import json, os; conclusion=os.environ["PROBE_CONCLUSION"]; repository=os.environ["PROBE_REPOSITORY"]; run_id=os.environ["PROBE_RUN_ID"]; print(json.dumps({"text": "AetherTune production operations probe " + conclusion + ": " + repository + " run " + run_id, "repository": repository, "run_id": run_id, "run_url": os.environ["PROBE_RUN_URL"], "commit": os.environ["PROBE_SHA"], "conclusion": conclusion}, separators=(",", ":")))')"
-          curl --fail-with-body --silent --show-error --max-time 15 \
-            --header 'Content-Type: application/json' \
-            --data "$payload" \
-            "$ALERT_WEBHOOK_URL"
+          # Curl reads only an escaped URL from stdin; never expose the private
+          # webhook in process arguments, receiver bodies, or transport errors.
+          delivery_status=0
+          http_code="$(python3 -c '
+          import os
+          url = os.environ["ALERT_WEBHOOK_URL"]
+          escaped = url.replace("\\", "\\\\").replace("\"", "\\\"")
+          print("url = \"" + escaped + "\"")
+          ' \
+            | curl --disable --fail --silent --max-time 15 --globoff --proto '=https' \
+              --header 'Content-Type: application/json' --data "$payload" \
+              --config - --output /dev/null --write-out '%{http_code}' 2>/dev/null)" || delivery_status=$?
+          if [ "$delivery_status" -ne 0 ]; then
+            echo 'Off-host alert delivery failed.' >&2
+            exit "$delivery_status"
+          fi
+          case "$http_code" in
+            2[0-9][0-9]) echo 'Off-host alert delivered.' ;;
+            *) echo 'Off-host alert delivery returned an unsuccessful HTTP status.' >&2; exit 1 ;;
+          esac
