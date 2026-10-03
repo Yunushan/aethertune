@@ -83,7 +83,9 @@ jobs:
         run: python3 scripts/ci/test_verify_ios_release_artifact.py
 
       - name: Test macOS release artifact verifier
-        run: python3 scripts/ci/test_verify_macos_release_artifacts.py
+        run: |
+          python3 scripts/ci/test_macos_signing_contract.py
+          python3 scripts/ci/test_verify_macos_release_artifacts.py
 
       - name: Test Windows release artifact verifier
         run: python3 scripts/ci/test_verify_windows_release_artifacts.py
@@ -470,6 +472,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 scripts/ci/test_macos_signing_contract.py
           bash ./scripts/ci/test_package_macos_zip.sh
           bash ./scripts/ci/test_package_macos_dmg.sh
           app_bundle="$(find apps/mobile/build/macos/Build/Products/Debug -maxdepth 1 -name '*.app' -type d | head -n 1)"
