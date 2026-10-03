@@ -94,6 +94,88 @@ ACTUAL_CHOOSER_ERROR = 'Atspi.Accessible.get_text() takes exactly 1 argument (3 
 ACTUAL_IMPORT_BUTTON_JSON = r'''{"actions": ["Tap", "Focus"], "name": "Import local audio", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}'''
 
 
+# Exact 74-node ordinary imported Library failure, run37142897399/artifact11281330985.
+# Raw tree SHA256 401ce78854145bba43811fdbe5ca80a88bf04b1aa7447c816d61b11564365e68.
+# Real chooser closed; this retained observation does not prove track playback.
+ACTUAL_IMPORTED_LIBRARY_SHA256 = '43158228eb35a23bfc55797653dda39e868abd6c7c7f463849ba2b14469ab37a'
+ACTUAL_IMPORTED_LIBRARY_JSON = r'''[
+{"actions": [], "name": "dev.aethertune.aethertune", "path": [], "role": "application", "states": []},
+{"actions": [], "name": "aethertune", "path": [0], "role": "frame", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "FOCUSED"]},
+{"actions": [], "name": "", "path": [0, 0, 0], "role": "filler", "states": []},
+{"actions": [], "name": "", "path": [0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["ScrollLeft", "ScrollRight", "Focus"], "name": "No track playing. Import local audio to start.\nQueue\nNothing is playing.\n0 tracks\nQueue tracks appear here.", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING", "FOCUSED"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "AetherTune", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "header", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Import local audio", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Import audio folder", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Home\nTab 1 of 6", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Library\nTab 2 of 6", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1], "role": "panel", "states": ["VISIBLE", "SHOWING", "SELECTED"]},
+{"actions": ["Tap", "Focus"], "name": "Playlists\nTab 3 of 6", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 2], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "History\nTab 4 of 6", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Sources\nTab 5 of 6", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Options\nTab 6 of 6", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 5], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2], "role": "push button", "states": ["VISIBLE", "SHOWING", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3], "role": "push button", "states": ["VISIBLE", "SHOWING", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4], "role": "push button", "states": ["VISIBLE", "SHOWING", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "DidGainAccessibilityFocus", "DidLoseAccessibilityFocus", "Focus"], "name": "Search title, artist, album, or genre", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0], "role": "text", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "EDITABLE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 1], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 3], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 4], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["ScrollLeft"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "aethertune-linux-behavior-180s", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 2], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Local Folder", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 2, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 4], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "documents", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 4, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 5], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 6], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Unknown Genre", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 6, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 7], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 8], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "local", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 8, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 9], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 10], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "/tmp/aethertune-release-fixture-_4_9nhg4/documents", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 10, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Artists", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 2], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Albums", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 2, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 3], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 4], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Genres", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 4, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 5], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 6], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Sources", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 6, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 7], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 8], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Folders", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 8, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 9], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "aethertune-linux-behavior-180s\nLocal Folder \u00b7 documents \u00b7 Unknown Genre", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}
+]'''
+
+
 class ObserverGuards(unittest.TestCase):
     def chooser_model(self, media):
         # Model the GI overload on one Accessible object implementing Text.
@@ -152,8 +234,12 @@ class ObserverGuards(unittest.TestCase):
             def get_action_iface(self):
                 names = self.value["actions"]
                 def action(index):
-                    self_test.assertEqual((self.value["name"], names[index]), ("Import local audio", "Tap"))
-                    state["open"] = True
+                    self_test.assertEqual(names[index], "Tap")
+                    if self.value["name"] == "Import local audio":
+                        state["open"] = True
+                    else:
+                        self_test.assertEqual(self.value["name"], f"{media.stem}\nLocal Folder · {media.parent.name} · Unknown Genre")
+                        state["events"].append(("track Tap", self.value["name"]))
                     return True
                 return SimpleNamespace(get_n_actions=lambda: len(names), get_action_name=lambda i: names[i], do_action=action)
         observer.atspi = SimpleNamespace(Text=Text, StateType=SimpleNamespace(**{name: name for name in
@@ -163,7 +249,10 @@ class ObserverGuards(unittest.TestCase):
             state["generation"] += 1
             state["events"].append(("fresh tree", None if identity is None else identity["pid"], state["generation"]))
             if identity is None:
-                values = [node((0,), media.stem, role="push button", actions=("Tap",))] if state["imported"] else [json.loads(ACTUAL_IMPORT_BUTTON_JSON)]
+                values = (json.loads(state["imported_json"]) if "imported_json" in state else [
+                    node((0,), "Library\nTab 2 of 6", states=("VISIBLE", "SHOWING", "SELECTED"), actions=("Tap", "Focus")),
+                    node((1,), f"{media.stem}\nLocal Folder · {media.parent.name} · Unknown Genre",
+                         role="push button", actions=("Tap", "Focus"))]) if state["imported"] else [json.loads(ACTUAL_IMPORT_BUTTON_JSON)]
             else:
                 self.assertEqual(identity, observer.portal)
                 values = json.loads(ACTUAL_CHOOSER_PROJECTION_JSON)
@@ -193,6 +282,124 @@ class ObserverGuards(unittest.TestCase):
                 self.assertEqual((key, modifiers), ("l", ("Control_L",)))
         observer.x11 = SimpleNamespace(assert_focus=focus, chord=chord)
         return observer, state
+
+    def test_actual_74_node_import_and_playback_use_unique_full_track_caption(self):
+        values = json.loads(ACTUAL_IMPORTED_LIBRARY_JSON)
+        canonical = json.dumps(values, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(len(values), 74)
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), ACTUAL_IMPORTED_LIBRARY_SHA256)
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory).resolve() / "documents" / "aethertune-linux-behavior-180s.wav"
+            media.parent.mkdir(); media.write_bytes(b"owned portable fixture, not native media acceptance")
+            observer, state = self.chooser_model(media)
+            state["imported_json"] = ACTUAL_IMPORTED_LIBRARY_JSON
+            observer.import_media()
+            self.assertIn(("key", "Return"), state["events"])
+            self.assertIn("imported-library", state["captures"])
+            broad = [n for n in values if ui.actionable(n, "Tap") and media.stem in n["name"]]
+            self.assertEqual(len(broad), 2)
+            chosen = ui.imported_track_row(values, media)
+            self.assertEqual(chosen["path"], [0,0,0,0,0,0,0,0,0,0,8,0,0])
+            self.assertNotEqual(chosen["name"], media.stem)
+            # Exercise real playback presence/action paths; stop before transport
+            # controls rather than manufacture runtime playback acceptance.
+            class MetadataBoundary(Exception):
+                pass
+            def wait(predicate, label, *args):
+                if label == "current owned track metadata":
+                    raise MetadataBoundary()
+                return predicate()
+            observer.wait = wait
+            with self.assertRaises(MetadataBoundary):
+                observer.playback(True)
+            self.assertEqual([e for e in state["events"] if e[0] == "track Tap"], [("track Tap", chosen["name"])])
+            state["events"].clear()
+            with self.assertRaises(MetadataBoundary):
+                observer.playback(False)
+            self.assertFalse(any(e[0] == "track Tap" for e in state["events"]))
+
+    def test_imported_track_row_rejects_ambiguous_hidden_disabled_or_other_library_context(self):
+        media = Path("/owned/documents/aethertune-linux-behavior-180s.wav")
+        def row(values):
+            return ui.unique([n for n in values if "\nLocal Folder · documents · Unknown Genre" in n["name"]], "captured TrackTile")
+        def alias(values, hidden=False):
+            duplicate = dict(row(values), path=[0,0,0,0,0,0,0,0,0,0,8,0,1])
+            if hidden:
+                duplicate["states"] = ["SHOWING", "ENABLED", "SENSITIVE"]
+            values.append(duplicate)
+        changes = {
+            "duplicate row": lambda v: alias(v), "hidden duplicate row": lambda v: alias(v, True),
+            "hidden": lambda v: row(v)["states"].remove("VISIBLE"),
+            "disabled": lambda v: row(v)["states"].remove("ENABLED"),
+            "defunct": lambda v: row(v)["states"].append("DEFUNCT"),
+            "wrong role": lambda v: row(v).update(role="panel"),
+            "missing Tap": lambda v: row(v)["actions"].remove("Tap"),
+            "missing Focus": lambda v: row(v)["actions"].remove("Focus"),
+            "different folder": lambda v: row(v).update(name=row(v)["name"].replace("documents", "other")),
+            "chip only": lambda v: v.remove(row(v)),
+            "Library not selected": lambda v: ui.selected_destination(v, "Library")["states"].remove("SELECTED"),
+        }
+        for name, change in changes.items():
+            with self.subTest(name=name):
+                values = json.loads(ACTUAL_IMPORTED_LIBRARY_JSON); change(values)
+                with self.assertRaises(RuntimeError):
+                    ui.imported_track_row(values, media)
+
+    def test_playback_reselects_track_and_library_context_between_presence_and_tap(self):
+        def duplicate(values):
+            actual = ui.unique([n for n in values if n["name"].startswith("aethertune-linux-behavior-180s\n")], "row")
+            values.append(dict(actual, path=[0,0,0,0,0,0,0,0,0,0,8,0,1], states=["SHOWING", "ENABLED", "SENSITIVE"]))
+        def lose_library(values):
+            ui.selected_destination(values, "Library")["states"].remove("SELECTED")
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory).resolve() / "documents" / "aethertune-linux-behavior-180s.wav"
+            media.parent.mkdir(); media.write_bytes(b"owned portable fixture")
+            for name, change in (("new hidden row alias", duplicate), ("navigation changed", lose_library)):
+                with self.subTest(name=name):
+                    observer, state = self.chooser_model(media)
+                    state.update(imported=True, imported_json=ACTUAL_IMPORTED_LIBRARY_JSON)
+                    def wait(predicate, label, *args):
+                        self.assertEqual(label, "owned imported track present")
+                        result = predicate()
+                        values = json.loads(state["imported_json"]);change(values)
+                        state["imported_json"] = json.dumps(values)
+                        return result
+                    observer.wait = wait
+                    with self.assertRaises(RuntimeError):
+                        observer.playback(True)
+                    self.assertFalse(any(e[0] == "track Tap" for e in state["events"]))
+
+    def test_imported_track_immediate_native_revalidation_rejects_changed_pid_name_state_or_tap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory).resolve() / "documents" / "aethertune-linux-behavior-180s.wav"
+            media.parent.mkdir();media.write_bytes(b"owned portable fixture")
+            for kind in ("PID", "name", "disabled", "hidden", "defunct", "missing Tap"):
+                with self.subTest(kind=kind):
+                    observer, state = self.chooser_model(media)
+                    state.update(imported=True, imported_json=ACTUAL_IMPORTED_LIBRARY_JSON)
+                    original = observer.find
+                    def find(*args, **kwargs):
+                        chosen = original(*args, **kwargs)
+                        accessible = chosen["accessible"]
+                        if kind == "PID":
+                            accessible.get_process_id = lambda: 999
+                        elif kind == "name":
+                            accessible.get_name = lambda: media.stem
+                        elif kind == "missing Tap":
+                            accessible.get_action_iface = lambda: SimpleNamespace(get_n_actions=lambda: 1,
+                                get_action_name=lambda index: "Focus", do_action=lambda index: self.fail("stale action invoked"))
+                        else:
+                            flags = set(chosen["states"])
+                            if kind == "disabled": flags.remove("ENABLED")
+                            elif kind == "hidden": flags.remove("VISIBLE")
+                            else: flags.add("DEFUNCT")
+                            accessible.get_state_set = lambda: SimpleNamespace(contains=lambda name: name in flags)
+                        return chosen
+                    observer.find = find
+                    with self.assertRaises(RuntimeError):
+                        observer.act("owned imported track", predicate=lambda n, ns:
+                            n["path"] == ui.imported_track_row(ns, media)["path"])
+                    self.assertFalse(any(e[0] == "track Tap" for e in state["events"]))
 
     def test_actual_chooser_text_interface_dispatch_bypasses_accessible_accessor_collision(self):
         projected = json.loads(ACTUAL_CHOOSER_PROJECTION_JSON)

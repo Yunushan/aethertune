@@ -117,6 +117,19 @@ def descendant(node, ancestor):
     return node["path"][:len(ancestor["path"])] == ancestor["path"]
 
 
+def imported_track_row(nodes, media):
+    # The owned untagged PCM fixture uses the scanner's filename/folder defaults.
+    # Library TrackTile joins its title and artist/album/genre subtitle; the
+    # stem-only ActionChip instead changes the search and must never play here.
+    selected_destination(nodes, "Library")
+    caption = f"{media.stem}\nLocal Folder · {media.parent.name} · Unknown Genre"
+    chosen = unique([n for n in nodes if n["name"] == caption], "owned Library TrackTile caption")
+    require(chosen["role"] == "push button" and actionable(chosen, "Tap") and
+            len(chosen["actions"]) == 2 and set(chosen["actions"]) == {"Tap", "Focus"},
+            "Owned Library TrackTile is hidden, disabled, defunct or lacks its observed role/capabilities")
+    return chosen
+
+
 def density_row(nodes, value):
     require(value in ("Comfortable", "Compact"), "Unexpected desktop density value")
     require(not any(n["name"] == "Popup menu" for n in nodes), "Density popup has not dismissed")
@@ -543,7 +556,7 @@ class Observer:
         self.keyboard("Return", (), chooser, self.portal, may_close=True)
         self.wait(lambda: not self.windows(self.portal, "flutter picker"), "real chooser closed after ordinary selection")
         self.wait(lambda: self.find("owned imported track", predicate=lambda n, ns:
-                                   self.args.media.stem in n["name"] and not n["name"].startswith("Open now playing for ")),
+                                   n["path"] == imported_track_row(ns, self.args.media)["path"]),
                   "ordinary imported track", 25)
         self.capture("imported-library")
 
@@ -556,11 +569,11 @@ class Observer:
     def playback(self, initial):
         self.nav(1)
         self.wait(lambda: self.find("owned imported track", predicate=lambda n, ns:
-                                   self.args.media.stem in n["name"] and not n["name"].startswith("Open now playing for ")),
+                                   n["path"] == imported_track_row(ns, self.args.media)["path"]),
                   "owned track present after ordinary reopen" if not initial else "owned imported track present")
         if initial:
-            self.act("owned imported track", predicate=lambda n, ns: self.args.media.stem in n["name"]
-                     and not n["name"].startswith("Open now playing for "))
+            self.act("owned imported track", predicate=lambda n, ns:
+                     n["path"] == imported_track_row(ns, self.args.media)["path"])
         open_player = lambda n, ns: n["name"].startswith("Open now playing for ") and self.args.media.stem in n["name"]
         self.wait(lambda: self.find("current owned track", predicate=open_player), "current owned track metadata")
         self.act("current owned track", predicate=open_player)

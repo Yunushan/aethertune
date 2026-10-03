@@ -76,6 +76,12 @@ The GTK location entry is resolved from a fresh tree of the owned portal process
 
 Behavior run 37141589677 used executor d601b16b00e6f0bcc8b4b5ef046a35951535d868 and the same verified rebuilt product. It repeated all eight keyboard checks, selected Compact through the ordinary popup, observed popup dismissal and the strict Compact setting row, and opened the real GTK picker. Independent screenshot review confirmed those states. The run remains FAIL because its text read resolved to the deprecated Accessible.get_text method and rejected the two offsets. It stopped before Return and successful import; playback, normal close and same-profile reopen were not reached. The predominantly occluded failure screenshot cannot establish a product crash or readable app state. The corrected interface call requires a fresh passing native result.
 
+### Imported Library track selection
+
+The ordinary Library exposes both a title filter chip and a TrackTile containing the title plus its artist, album and genre subtitle. Imported-track observation and playback selection must match the full owned-fixture track caption and require one actionable track row. A bare title chip is not the track row. Existing fresh owned-process, visible/enabled state, unique-target and native named-Tap checks remain required; duplicates must fail.
+
+Behavior run 37142897399 used executor 2286eeeba3db4215d8c94bee8a5a5ba4e711feca and the same verified rebuilt product. Its real GTK Text read verified the exact owned WAV path, Return selected that file and the picker closed. The actual Library screenshot then showed both the filename filter chip and the imported local track row. The observer remains FAIL because its substring selector matched both actionable controls. The fourteen actual screenshots and seventy-four-node tree passed independent visual review. No track Tap, playback, normal close or same-profile reopen was reached; successful file selection and visible track metadata do not establish the complete behavior gate. The corrected track selector requires fresh native execution.
+
 ## Remaining production scope
 
 This is limited Linux evidence for requirements **3c** and the keyboard portion of **3h** in the readiness audit. Production distribution trust, physical audible output, representative codecs/providers, screen-reader and full accessibility coverage, versioned migration/upgrade/rollback, and the other platform gates remain open until their own evidence is complete.
