@@ -24,6 +24,7 @@ import '../domain/track_skip_segment.dart';
 import '../player/offline_playback_policy.dart';
 import '../player/player_controller.dart';
 import 'platform_image_share.dart';
+import 'widgets/accessible_icon_button.dart';
 import 'widgets/artwork_palette_backdrop.dart';
 import 'widgets/track_artwork.dart';
 import 'widgets/track_share_card.dart';
@@ -1565,14 +1566,18 @@ class _NowPlayingControls extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: canFavorite
-                    ? (isFavorite
-                          ? 'Remove from favorites'
-                          : 'Add to favorites')
-                    : 'Save this track to the library to favorite it',
-                onPressed: onToggleFavorite,
-                icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+              AccessibleIconButton(
+                button: IconButton(
+                  tooltip: canFavorite
+                      ? (isFavorite
+                            ? 'Remove from favorites'
+                            : 'Add to favorites')
+                      : 'Save this track to the library to favorite it',
+                  onPressed: onToggleFavorite,
+                  icon: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1655,69 +1660,85 @@ class _NowPlayingControls extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final controls = <Widget>[
-                IconButton(
-                  key: const Key('now-playing-shuffle'),
-                  tooltip: player.shuffleEnabled
-                      ? 'Disable shuffle'
-                      : 'Enable shuffle',
-                  isSelected: player.shuffleEnabled,
-                  onPressed: () =>
-                      player.setShuffleEnabled(!player.shuffleEnabled),
-                  icon: const Icon(Icons.shuffle),
+                AccessibleIconButton(
+                  button: IconButton(
+                    key: const Key('now-playing-shuffle'),
+                    tooltip: player.shuffleEnabled
+                        ? 'Disable shuffle'
+                        : 'Enable shuffle',
+                    isSelected: player.shuffleEnabled,
+                    onPressed: () =>
+                        player.setShuffleEnabled(!player.shuffleEnabled),
+                    icon: const Icon(Icons.shuffle),
+                  ),
                 ),
-                IconButton(
-                  tooltip: 'Previous',
-                  iconSize: 36,
-                  onPressed: player.queue.isEmpty
-                      ? null
-                      : () => _runPlaybackAction(context, player.previous),
-                  icon: const Icon(Icons.skip_previous),
+                AccessibleIconButton(
+                  button: IconButton(
+                    tooltip: 'Previous',
+                    iconSize: 36,
+                    onPressed: player.queue.isEmpty
+                        ? null
+                        : () => _runPlaybackAction(context, player.previous),
+                    icon: const Icon(Icons.skip_previous),
+                  ),
                 ),
-                IconButton(
-                  key: const Key('now-playing-skip-backward'),
-                  tooltip:
-                      'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
-                  onPressed: player.duration > Duration.zero
-                      ? player.skipBackward
-                      : null,
-                  icon: const Icon(Icons.fast_rewind),
+                AccessibleIconButton(
+                  button: IconButton(
+                    key: const Key('now-playing-skip-backward'),
+                    tooltip:
+                        'Skip back ${player.skipBackwardInterval.inSeconds} seconds',
+                    onPressed: player.duration > Duration.zero
+                        ? player.skipBackward
+                        : null,
+                    icon: const Icon(Icons.fast_rewind),
+                  ),
                 ),
-                IconButton.filled(
-                  key: const Key('now-playing-play-pause'),
-                  tooltip: player.isPlaying ? 'Pause' : 'Play',
-                  iconSize: 40,
-                  padding: const EdgeInsets.all(18),
-                  onPressed: () =>
-                      _runPlaybackAction(context, player.togglePlayPause),
-                  icon: Icon(player.isPlaying ? Icons.pause : Icons.play_arrow),
+                AccessibleIconButton(
+                  button: IconButton.filled(
+                    key: const Key('now-playing-play-pause'),
+                    tooltip: player.isPlaying ? 'Pause' : 'Play',
+                    iconSize: 40,
+                    padding: const EdgeInsets.all(18),
+                    onPressed: () =>
+                        _runPlaybackAction(context, player.togglePlayPause),
+                    icon: Icon(
+                      player.isPlaying ? Icons.pause : Icons.play_arrow,
+                    ),
+                  ),
                 ),
-                IconButton(
-                  key: const Key('now-playing-skip-forward'),
-                  tooltip:
-                      'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
-                  onPressed: player.duration > Duration.zero
-                      ? player.skipForward
-                      : null,
-                  icon: const Icon(Icons.fast_forward),
+                AccessibleIconButton(
+                  button: IconButton(
+                    key: const Key('now-playing-skip-forward'),
+                    tooltip:
+                        'Skip forward ${player.skipForwardInterval.inSeconds} seconds',
+                    onPressed: player.duration > Duration.zero
+                        ? player.skipForward
+                        : null,
+                    icon: const Icon(Icons.fast_forward),
+                  ),
                 ),
-                IconButton(
-                  tooltip: 'Next',
-                  iconSize: 36,
-                  onPressed: player.queue.isEmpty
-                      ? null
-                      : () => _runPlaybackAction(context, player.next),
-                  icon: const Icon(Icons.skip_next),
+                AccessibleIconButton(
+                  button: IconButton(
+                    tooltip: 'Next',
+                    iconSize: 36,
+                    onPressed: player.queue.isEmpty
+                        ? null
+                        : () => _runPlaybackAction(context, player.next),
+                    icon: const Icon(Icons.skip_next),
+                  ),
                 ),
-                IconButton(
-                  key: const Key('now-playing-repeat'),
-                  tooltip: _repeatTooltip(player.loopMode),
-                  isSelected: player.loopMode != LoopMode.off,
-                  onPressed: () =>
-                      player.setLoopMode(_nextLoopMode(player.loopMode)),
-                  icon: Icon(
-                    player.loopMode == LoopMode.one
-                        ? Icons.repeat_one
-                        : Icons.repeat,
+                AccessibleIconButton(
+                  button: IconButton(
+                    key: const Key('now-playing-repeat'),
+                    tooltip: _repeatTooltip(player.loopMode),
+                    isSelected: player.loopMode != LoopMode.off,
+                    onPressed: () =>
+                        player.setLoopMode(_nextLoopMode(player.loopMode)),
+                    icon: Icon(
+                      player.loopMode == LoopMode.one
+                          ? Icons.repeat_one
+                          : Icons.repeat,
+                    ),
                   ),
                 ),
               ];

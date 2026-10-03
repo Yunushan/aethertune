@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../player/offline_playback_policy.dart';
 import '../../player/player_controller.dart';
+import 'accessible_icon_button.dart';
 import 'track_artwork.dart';
 
 class PlayerBar extends StatelessWidget {
@@ -147,41 +148,59 @@ class PlayerBar extends StatelessWidget {
                         ),
                       ),
                       if (!compact) ...<Widget>[
-                        IconButton(
-                          tooltip: 'Lyrics',
-                          onPressed: onOpenLyrics,
-                          icon: const Icon(Icons.subtitles_outlined),
+                        AccessibleIconButton(
+                          button: IconButton(
+                            tooltip: 'Lyrics',
+                            onPressed: onOpenLyrics,
+                            icon: const Icon(Icons.subtitles_outlined),
+                          ),
                         ),
-                        IconButton(
-                          tooltip: 'Edit queue',
-                          onPressed: player.queue.isEmpty ? null : onOpenQueue,
-                          icon: const Icon(Icons.queue_music),
+                        AccessibleIconButton(
+                          button: IconButton(
+                            tooltip: 'Edit queue',
+                            onPressed: player.queue.isEmpty
+                                ? null
+                                : onOpenQueue,
+                            icon: const Icon(Icons.queue_music),
+                          ),
                         ),
-                        IconButton(
-                          tooltip: 'Save queue as playlist',
-                          onPressed: player.queue.isEmpty ? null : onSaveQueue,
-                          icon: const Icon(Icons.playlist_add),
+                        AccessibleIconButton(
+                          button: IconButton(
+                            tooltip: 'Save queue as playlist',
+                            onPressed: player.queue.isEmpty
+                                ? null
+                                : onSaveQueue,
+                            icon: const Icon(Icons.playlist_add),
+                          ),
                         ),
-                        IconButton(
-                          tooltip: 'Previous',
-                          onPressed: () =>
-                              _runPlaybackAction(context, player.previous),
-                          icon: const Icon(Icons.skip_previous),
+                        AccessibleIconButton(
+                          button: IconButton(
+                            tooltip: 'Previous',
+                            onPressed: () =>
+                                _runPlaybackAction(context, player.previous),
+                            icon: const Icon(Icons.skip_previous),
+                          ),
                         ),
                       ],
-                      IconButton.filledTonal(
-                        tooltip: player.isPlaying ? 'Pause' : 'Play',
-                        onPressed: () =>
-                            _runPlaybackAction(context, player.togglePlayPause),
-                        icon: Icon(
-                          player.isPlaying ? Icons.pause : Icons.play_arrow,
+                      AccessibleIconButton(
+                        button: IconButton.filledTonal(
+                          tooltip: player.isPlaying ? 'Pause' : 'Play',
+                          onPressed: () => _runPlaybackAction(
+                            context,
+                            player.togglePlayPause,
+                          ),
+                          icon: Icon(
+                            player.isPlaying ? Icons.pause : Icons.play_arrow,
+                          ),
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Next',
-                        onPressed: () =>
-                            _runPlaybackAction(context, player.next),
-                        icon: const Icon(Icons.skip_next),
+                      AccessibleIconButton(
+                        button: IconButton(
+                          tooltip: 'Next',
+                          onPressed: () =>
+                              _runPlaybackAction(context, player.next),
+                          icon: const Icon(Icons.skip_next),
+                        ),
                       ),
                     ],
                   ),
