@@ -535,7 +535,9 @@ class Observer:
         require(editable is not None and editable.set_text_contents(str(self.args.media)), "Real chooser path entry rejected")
         fresh = location_entry()
         text = fresh["accessible"].get_text_iface()
-        require(text is not None and text.get_text(0, -1) == str(self.args.media), "Real chooser path entry differs from owned media")
+        # GI returns the same Accessible for Text; its get_text() accessor
+        # shadows the interface method, so dispatch through Atspi.Text explicitly.
+        require(text is not None and self.atspi.Text.get_text(text, 0, -1) == str(self.args.media), "Real chooser path entry differs from owned media")
         self.record("actions", "real chooser path entry", target=self.describe(fresh), media_sha256=self.args.media_sha256)
         self.capture("chooser-owned-path", chooser)
         self.keyboard("Return", (), chooser, self.portal, may_close=True)

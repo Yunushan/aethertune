@@ -85,7 +85,173 @@ ACTUAL_DENSITY_POPUP_JSON = r'''[
 ACTUAL_DENSITY_OPENING_JSON = r'''{"actions": ["Tap", "Focus"], "name": "Desktop density\nChoose how much space desktop controls and lists use.\nComfortable", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 9], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}'''
 
 
+# Exact chooser/text projection from the retained 141-node GTK failure tree,
+# run37141589677/artifact11280965116, raw SHA256 662bce30991a5b0850c6161e543c221d34af4bffc460a87bdbce9126a757a3da.
+# It records the API failure, not a positive import or native path-read result.
+ACTUAL_CHOOSER_PROJECTION_JSON = r'''[{"actions": [], "name": "flutter picker", "path": [0], "role": "file chooser", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}, {"actions": ["activate"], "name": "", "path": [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], "role": "text", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "FOCUSED", "EDITABLE"]}, {"actions": ["activate"], "name": "", "path": [0, 1, 0, 2], "role": "text", "states": ["VISIBLE", "ENABLED", "SENSITIVE", "EDITABLE"]}, {"actions": ["activate"], "name": "", "path": [0, 2, 0, 2], "role": "text", "states": ["VISIBLE", "ENABLED", "SENSITIVE", "EDITABLE"]}]'''
+ACTUAL_CHOOSER_PROJECTION_SHA256 = '327222d704ba1480307ee115cec30146095ef430e1eec1f540521c962c64c6b5'
+ACTUAL_CHOOSER_ERROR = 'Atspi.Accessible.get_text() takes exactly 1 argument (3 given)'
+ACTUAL_IMPORT_BUTTON_JSON = r'''{"actions": ["Tap", "Focus"], "name": "Import local audio", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}'''
+
+
 class ObserverGuards(unittest.TestCase):
+    def chooser_model(self, media):
+        # Model the GI overload on one Accessible object implementing Text.
+        # Real import_media/find/act/keyboard run; no GTK process/input is used.
+        state = {"open": False, "imported": False, "written": None, "readback": None, "events": [],
+                 "generation": 0, "edit_generation": None, "missing_text": False, "missing_editable": False,
+                 "edit_rejected": False, "fresh_change": None, "owned": True, "lose_owner_after_write": False,
+                 "focus": True, "captures": []}
+        observer = object.__new__(ui.Observer)
+        observer.app, observer.portal = {"pid": 12}, {"pid": 4867, "start_ticks": 8406, "exe": "/usr/libexec/xdg-desktop-portal-gtk"}
+        observer.window, observer.deadline = 99, float("inf")
+        observer.args = SimpleNamespace(media=media, media_sha256=hashlib.sha256(media.read_bytes()).hexdigest())
+        observer.report = {"actions": [], "observations": []}
+        observer.bound = lambda: ui.require(state["owned"], "Owned portal process identity changed")
+        observer.nav = lambda index: self.assertEqual(index, 1)
+        observer.wait = lambda predicate, label, *args: predicate()
+        observer.capture = lambda label, window=None: state["captures"].append(label)
+        self_test = self
+        class Text:
+            @staticmethod
+            def get_text(obj, start, end):
+                self.assertIsInstance(obj, Accessible)
+                self.assertEqual((start, end), (0, -1))
+                self.assertGreater(obj.generation, state["edit_generation"], "Path verification reused the pre-write accessible")
+                state["events"].append(("Text.get_text", obj.generation, start, end))
+                return state["readback"] if state["readback"] is not None else state["written"]
+        class Accessible(Text):
+            def __init__(self, value, generation):
+                self.value, self.generation = value, generation
+            # Accessible's zero-offset accessor shadows Text.get_text in GI.
+            # Calling obj.get_text(0,-1) therefore raises the observed arity class.
+            def get_text(self):
+                return self
+            def get_text_iface(self):
+                state["events"].append(("get_text_iface", self.generation))
+                return None if state["missing_text"] else self
+            def get_editable_text_iface(self):
+                return None if state["missing_editable"] else self
+            def set_text_contents(self, value):
+                state["events"].append(("set_text_contents", self.generation, value))
+                if state["edit_rejected"]:
+                    return False
+                state["written"], state["edit_generation"] = value, self.generation
+                if state["lose_owner_after_write"]:
+                    state["owned"] = False
+                return True
+            def clear_cache_single(self):
+                state["events"].append(("clear", self.value["name"]))
+            def get_process_id(self):
+                return 12
+            def get_name(self):
+                return self.value["name"]
+            def get_state_set(self):
+                flags = frozenset(self.value["states"])
+                return SimpleNamespace(contains=lambda name: name in flags)
+            def get_action_iface(self):
+                names = self.value["actions"]
+                def action(index):
+                    self_test.assertEqual((self.value["name"], names[index]), ("Import local audio", "Tap"))
+                    state["open"] = True
+                    return True
+                return SimpleNamespace(get_n_actions=lambda: len(names), get_action_name=lambda i: names[i], do_action=action)
+        observer.atspi = SimpleNamespace(Text=Text, StateType=SimpleNamespace(**{name: name for name in
+            ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "DEFUNCT")}))
+        def tree(identity=None):
+            observer.bound()
+            state["generation"] += 1
+            state["events"].append(("fresh tree", None if identity is None else identity["pid"], state["generation"]))
+            if identity is None:
+                values = [node((0,), media.stem, role="push button", actions=("Tap",))] if state["imported"] else [json.loads(ACTUAL_IMPORT_BUTTON_JSON)]
+            else:
+                self.assertEqual(identity, observer.portal)
+                values = json.loads(ACTUAL_CHOOSER_PROJECTION_JSON)
+                if state["written"] is not None and state["fresh_change"]:
+                    state["fresh_change"](values)
+            for value in values:
+                value["path"] = tuple(value["path"])
+                value["accessible"] = Accessible(value, state["generation"])
+            return values
+        observer.tree = tree
+        def windows(identity, title):
+            observer.bound()
+            self.assertEqual((identity, title), (observer.portal, "flutter picker"))
+            return [4194311] if state["open"] else []
+        observer.windows = windows
+        def focus(window, identity):
+            observer.bound()
+            self.assertEqual((window, identity), (4194311, observer.portal))
+            ui.require(state["focus"], "Native chooser focus changed")
+        def chord(window, identity, key, modifiers=(), may_close=False):
+            focus(window, identity)
+            state["events"].append(("key", key))
+            if key == "Return":
+                self.assertTrue(may_close)
+                state["open"], state["imported"] = False, True
+            else:
+                self.assertEqual((key, modifiers), ("l", ("Control_L",)))
+        observer.x11 = SimpleNamespace(assert_focus=focus, chord=chord)
+        return observer, state
+
+    def test_actual_chooser_text_interface_dispatch_bypasses_accessible_accessor_collision(self):
+        projected = json.loads(ACTUAL_CHOOSER_PROJECTION_JSON)
+        canonical = json.dumps(projected, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), ACTUAL_CHOOSER_PROJECTION_SHA256)
+        focused = [n for n in projected if n["role"] == "text" and "FOCUSED" in n["states"]]
+        self.assertEqual(len(focused), 1)
+        self.assertEqual(focused[0]["actions"], ["activate"])
+        self.assertEqual(ACTUAL_CHOOSER_ERROR, "Atspi.Accessible.get_text() takes exactly 1 argument (3 given)")
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory).resolve() / "owned-chooser-180s.wav"
+            media.write_bytes(b"owned synthetic unit fixture")
+            observer, state = self.chooser_model(media)
+            observer.import_media()
+            self.assertEqual(state["written"], str(media))
+            reads = [event for event in state["events"] if event[0] == "Text.get_text"]
+            self.assertEqual(len(reads), 1)
+            self.assertEqual(reads[0][2:], (0, -1))
+            self.assertGreater(reads[0][1], state["edit_generation"])
+            self.assertEqual(state["captures"], ["real-chooser", "chooser-owned-path", "imported-library"])
+            self.assertTrue(state["imported"])
+            self.assertEqual(observer.report["actions"][-2]["label"], "real chooser path entry")
+
+    def test_chooser_readback_rejects_missing_interfaces_rejected_edit_or_other_media_path_before_return(self):
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory).resolve() / "owned-chooser.wav"; media.write_bytes(b"owned")
+            for name, key, value in (("missing Text", "missing_text", True), ("missing EditableText", "missing_editable", True),
+                                     ("rejected edit", "edit_rejected", True), ("different path", "readback", str(media)+".other")):
+                with self.subTest(name=name):
+                    observer, state = self.chooser_model(media);state[key] = value
+                    with self.assertRaises(RuntimeError):
+                        observer.import_media()
+                    self.assertNotIn(("key", "Return"), state["events"])
+                    self.assertFalse(state["imported"])
+
+    def test_chooser_verification_reselects_fresh_focused_owned_entry_and_preserves_native_focus_guard(self):
+        def entry(values):
+            return ui.unique([n for n in values if n["role"] == "text" and "FOCUSED" in n["states"]], "captured focused entry")
+        changes = {
+            "lost focus": lambda v: entry(v)["states"].remove("FOCUSED"),
+            "hidden": lambda v: entry(v)["states"].remove("VISIBLE"),
+            "duplicate": lambda v: v.append(dict(entry(v), path=[99])),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory).resolve() / "owned-chooser.wav";media.write_bytes(b"owned")
+            for name, change in changes.items():
+                with self.subTest(name=name):
+                    observer, state = self.chooser_model(media);state["fresh_change"] = change
+                    with self.assertRaises(RuntimeError):
+                        observer.import_media()
+                    self.assertIsNotNone(state["written"])
+                    self.assertFalse(any(event[0] == "Text.get_text" for event in state["events"]))
+                    self.assertNotIn(("key", "Return"), state["events"])
+            for key in ("lose_owner_after_write", "focus"):
+                observer, state = self.chooser_model(media);state[key] = key != "focus"
+                with self.assertRaises(RuntimeError):
+                    observer.import_media()
+                self.assertNotIn(("key", "Return"), state["events"])
+
     def density_model(self):
         # Real observer density/find/act paths against captured semantics and a
         # changing native-call model. No application process/storage is involved.
