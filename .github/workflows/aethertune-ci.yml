@@ -424,7 +424,23 @@ jobs:
         run: bash ./scripts/bootstrap_client.sh
 
       - name: Build desktop app
+        if: matrix.target != 'windows'
         run: cd apps/mobile && flutter build ${{ matrix.target }} --debug
+
+      - name: Build Windows desktop app with verbose log
+        id: windows-build
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: ./scripts/ci/build_windows_with_log.ps1
+
+      - name: Upload Windows native build log
+        if: ${{ always() && matrix.target == 'windows' && steps.windows-build.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aethertune-windows-native-build-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
+          path: build/windows-native-build/windows-build.log
 
       - name: Run Linux desktop integration smoke test
         if: matrix.target == 'linux'
