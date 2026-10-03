@@ -25,6 +25,9 @@ DESTINATIONS = ("Home", "Library", "Playlists", "History", "Sources", "Options")
 MAX_NODES, MAX_DEPTH = 1800, 48
 OBSERVER_SECONDS, TRACEBACK_SECONDS, MAX_CHECKPOINTS = 150, 30, 128
 SCROLL_ACTIONS = frozenset(("ScrollLeft", "ScrollRight", "ScrollUp", "ScrollDown", "ShowOnScreen"))
+MAX_ONBOARDING_REVEALS = 4
+ONBOARDING_LABELS = frozenset(("Welcome to AetherTune", "Set up a local library", "Explore legal sources",
+                              "Connect your music server", "Privacy first"))
 
 
 def timestamp():
@@ -107,6 +110,31 @@ def selected_destination(nodes, destination):
 
 def descendant(node, ancestor):
     return node["path"][:len(ancestor["path"])] == ancestor["path"]
+
+
+def onboarding_target(nodes):
+    skip = [n for n in nodes if name_line(n["name"], "Skip setup")]
+    require(len(skip) <= 1, "Ambiguous onboarding Skip setup control")
+    if skip:
+        chosen = skip[0]
+        require("DEFUNCT" not in chosen["states"] and not (
+            "SENSITIVE" in chosen["states"] and "ENABLED" not in chosen["states"]),
+            "Onboarding Skip setup control is disabled or defunct")
+        for action in ("Tap", "ShowOnScreen"):
+            if actionable(chosen, action):
+                return chosen, action
+    # The ListView can omit its offscreen final button. Bind a real scroll
+    # capability to two distinct visible headings/cards from exact English l10n.
+    scrolls = []
+    for candidate in nodes:
+        if not actionable(candidate, "ScrollDown"):
+            continue
+        labels = {label for child in nodes if child["path"] != candidate["path"]
+                  and descendant(child, candidate) and available(child)
+                  for label in ONBOARDING_LABELS if name_line(child["name"], label)}
+        if len(labels) >= 2:
+            scrolls.append(candidate)
+    return unique(scrolls, "onboarding ScrollDown container bound to visible setup labels"), "ScrollDown"
 
 
 def seek_slider(nodes):
@@ -279,7 +307,10 @@ class Observer:
             if self.remote(app.get_process_id) == identity["pid"]:
                 roots.append(app)
         root = unique(roots, "AT-SPI application with exact owned PID")
-        self.remote(root.set_cache_mask, self.atspi.Cache.NONE)
+        # libatspi membership calls refresh remotely unless STATES can be
+        # marked cached. Invalidate each node below before its fresh read, then
+        # inspect that native state snapshot locally; other metadata stays uncached.
+        self.remote(root.set_cache_mask, self.atspi.Cache.STATES)
         self.checkpoint("before semantic tree node traversal")
         pending, nodes = [(root, ())], []
         while pending:
@@ -376,6 +407,24 @@ class Observer:
         destination = DESTINATIONS[index]
         node = self.wait(lambda: selected_destination(self.tree(), destination), f"Ctrl+{index+1} selected {destination}")
         self.record("observations", "selected destination", destination=destination, target=self.describe(node))
+
+    def skip_onboarding(self):
+        self.wait(lambda: onboarding_target(self.tree()), "ordinary first-launch onboarding", 25)
+        for attempt in range(MAX_ONBOARDING_REVEALS + 1):
+            target, action = onboarding_target(self.tree())
+            # Select again from act's fresh owned-PID tree, then revalidate native
+            # identity, state and named action before invoking the capability.
+            def still_selected(node, nodes):
+                current, current_action = onboarding_target(nodes)
+                return current_action == action and node["path"] == current["path"]
+            if action == "Tap":
+                self.capture("onboarding")
+                self.act("Skip setup", predicate=still_selected)
+                return
+            require(attempt < MAX_ONBOARDING_REVEALS, "Onboarding reveal budget exhausted before actionable Skip setup")
+            label = "onboarding Skip setup reveal" if action == "ShowOnScreen" else "onboarding list scroll"
+            self.act(label, action, predicate=still_selected)
+            time.sleep(0.4)
 
     def density(self, initial):
         self.nav(5)
@@ -499,9 +548,7 @@ class Observer:
         self.checkpoint("before first semantic tree/native calls")
         initial = self.args.phase == "initial"
         if initial:
-            self.wait(lambda: self.find("Skip setup"), "ordinary first-launch onboarding", 25)
-            self.capture("onboarding")
-            self.act("Skip setup")
+            self.skip_onboarding()
             self.wait(lambda: selected_destination(self.tree(), "Home"), "ordinary onboarding finished at Home")
             for index in (1, 2, 3, 4, 5, 0):
                 self.nav(index)

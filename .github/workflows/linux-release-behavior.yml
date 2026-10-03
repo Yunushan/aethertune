@@ -53,7 +53,7 @@ jobs:
       - name: Checkout exact original product verifier source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: a1d75fbc37fd9951130194798811cfd913e34724
+          ref: 4b9a309856ab028efc45d8a434ccaabda014e9c0
           path: build/linux-release-behavior/product-source
           persist-credentials: false
 

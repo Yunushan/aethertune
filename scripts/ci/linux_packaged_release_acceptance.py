@@ -40,10 +40,10 @@ Categories=AudioVideo;Audio;Player;
 StartupNotify=true
 """
 MEDIA_SHA256 = "46a9550c85b396e7ec9f89ab2fb407a2cb12078623edc9d686728816ea4babe9"
-PRODUCT_COMMIT = "a1d75fbc37fd9951130194798811cfd913e34724"
-PRODUCT_REF = "refs/heads/codex/readiness-linux-release"
-PRODUCT_DEB = "39f85c5d975991e51fa87ac6fb7059391b5ef1cb4fbd01819f557b03f78e3238"
-PRODUCT_TAR = "37c786299c238c77c70909c195e7a1eb10d2982674819f319631d2834c6ac623"
+PRODUCT_COMMIT = "4b9a309856ab028efc45d8a434ccaabda014e9c0"
+PRODUCT_REF = "refs/heads/codex/readiness-linux-behavior"
+PRODUCT_DEB = "89e536125f1436d809c332e54ab9a85328d3308eec985223875aae63cd9ce3ef"
+PRODUCT_TAR = "d41c76c2a93ea5b0efdf466b081f30ead45d7dbf75f875b468b8e7f20345934f"
 PRODUCT_EXE = "3d8ff13301a5c212be9e020a8d7a20899945d8d5e40401c84136a103357061fc"
 
 
@@ -447,12 +447,12 @@ def behavior_provenance(path, args, hashes, bundle, environ=os.environ):
     require(receipt.get("schemaVersion") == 1 and receipt.get("status") == "verified-input", "Product provenance is not verified input")
     product, executor = receipt.get("product", {}), receipt.get("executor", {})
     expected = {"repository": "Yunushan/aethertune", "sourceCommit": PRODUCT_COMMIT,
-                "sourceRef": PRODUCT_REF, "runId": 37041509348, "runAttempt": 1, "version": "0.1.0"}
+                "sourceRef": PRODUCT_REF, "runId": 37130672909, "runAttempt": 1, "version": "0.1.0"}
     require(all(product.get(k) == v for k, v in expected.items()), "Original product identity differs")
     require(args.version == product["version"], "Original product version differs")
     artifact = product.get("artifact", {})
-    require(artifact.get("id") == 11243123879 and artifact.get("name") == "aethertune-release-bundle" and
-            artifact.get("outerSha256") == "68876ee3e05f7087b6d33309a6fb5fc3ed8f49a9660d28cb54a4b8c7516902cf", "Original artifact identity differs")
+    require(artifact.get("id") == 11277216890 and artifact.get("name") == "aethertune-release-bundle" and
+            artifact.get("outerSha256") == "45556692c3d64e4f7890b7f9a3f4587e126d74cc54dfcd4188fb62ad5a491262", "Original artifact identity differs")
     linux = product.get("linux", {})
     require(linux.get("debSha256") == hashes["deb"] == PRODUCT_DEB and
             linux.get("tarballSha256") == hashes["tarball"] == PRODUCT_TAR and
@@ -466,7 +466,7 @@ def behavior_provenance(path, args, hashes, bundle, environ=os.environ):
             certificate.get("sourceRepositoryDigest") == PRODUCT_COMMIT and
             certificate.get("sourceRepositoryRef") == PRODUCT_REF and
             certificate.get("runnerEnvironment") == "github-hosted" and
-            certificate.get("runInvocationURI") == "https://github.com/Yunushan/aethertune/actions/runs/37041509348/attempts/1",
+            certificate.get("runInvocationURI") == "https://github.com/Yunushan/aethertune/actions/runs/37130672909/attempts/1",
             "Original attestation certificate identity differs")
     require(executor.get("repository") == environ.get("GITHUB_REPOSITORY") and
             executor.get("triggerSha") == environ.get("GITHUB_SHA") and

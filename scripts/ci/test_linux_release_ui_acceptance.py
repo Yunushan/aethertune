@@ -19,6 +19,148 @@ def node(path, name="", role="panel", states=("VISIBLE", "SHOWING", "ENABLED"), 
 
 
 class ObserverGuards(unittest.TestCase):
+    def onboarding_model(self, reveal_action="ShowOnScreen", required_reveals=1):
+        # Portable model of changing native state/actions; never native acceptance.
+        status = {"reveals": 0, "actions": [], "events": [], "trees": 0, "pid": 12, "disabled": False}
+        observer = object.__new__(ui.Observer)
+        observer.app, observer.deadline = {"pid": 12}, float("inf")
+        observer.report = {"actions": [], "observations": []}
+        observer.bound = lambda: None
+        observer.capture = lambda label: status["events"].append(("capture", label))
+        observer.atspi = SimpleNamespace(StateType=SimpleNamespace(**{name: name for name in
+            ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "DEFUNCT")}))
+        def visible():
+            return status["reveals"] >= required_reveals
+        def native_states(name):
+            if name == "Skip setup":
+                flags = {"SENSITIVE"} if status["disabled"] else {"SENSITIVE", "ENABLED"}
+                return flags | ({"VISIBLE", "SHOWING"} if visible() else set())
+            return {"VISIBLE", "SHOWING"}
+        def accessible(value):
+            def state_set():
+                snapshot = frozenset(native_states(value["name"]))
+                status["events"].append(("state", value["name"], snapshot))
+                return SimpleNamespace(contains=lambda name: name in snapshot)
+            def do_action(index):
+                action = value["actions"][index]
+                if action == "Tap":
+                    self.assertTrue(visible(), "Skip was tapped while still offscreen")
+                    self.assertFalse(status["disabled"])
+                else:
+                    status["reveals"] += 1
+                status["actions"].append(action)
+                status["events"].append(("action", action))
+                return True
+            return SimpleNamespace(clear_cache_single=lambda: status["events"].append(("clear", value["name"])),
+                get_process_id=lambda: status["pid"], get_name=lambda: value["name"], get_state_set=state_set,
+                get_action_iface=lambda: SimpleNamespace(get_n_actions=lambda: len(value["actions"]),
+                    get_action_name=lambda index: value["actions"][index], do_action=do_action))
+        def tree(identity=None):
+            status["trees"] += 1
+            values = []
+            if reveal_action == "ShowOnScreen" or visible():
+                values.append(node((0, 0), "Skip setup", states=native_states("Skip setup"),
+                                   actions=("Tap", "ShowOnScreen")))
+            if reveal_action == "ScrollDown":
+                values.extend([node((0, 1), states=native_states("list"), actions=("ScrollDown",)),
+                               node((0, 1, 0), "Explore legal sources"),
+                               node((0, 1, 1), "Connect your music server")])
+            for value in values:
+                value["accessible"] = accessible(value)
+            return values
+        observer.tree = tree
+        return observer, status
+
+    def test_onboarding_hidden_skip_is_revealed_before_strict_tap(self):
+        observer, status = self.onboarding_model()
+        with patch.object(ui.time, "sleep"):
+            observer.skip_onboarding()
+        self.assertEqual(status["actions"], ["ShowOnScreen", "Tap"])
+        self.assertGreaterEqual(status["trees"], 5)
+        self.assertLess(status["events"].index(("action", "ShowOnScreen")),
+                        status["events"].index(("capture", "onboarding")))
+        self.assertLess(status["events"].index(("capture", "onboarding")),
+                        status["events"].index(("action", "Tap")))
+        self.assertEqual([event for event in status["events"] if event[0] == "clear"],
+                         [("clear", "Skip setup"), ("clear", "Skip setup")])
+
+    def test_onboarding_lazy_skip_uses_only_scoped_observed_scroll(self):
+        observer, status = self.onboarding_model("ScrollDown")
+        with patch.object(ui.time, "sleep"):
+            observer.skip_onboarding()
+        self.assertEqual(status["actions"], ["ScrollDown", "Tap"])
+        self.assertGreaterEqual(status["trees"], 5)
+
+    def test_onboarding_final_tap_rejects_hidden_duplicate_introduced_during_capture(self):
+        observer, status = self.onboarding_model(required_reveals=0)
+        original_tree, original_capture = observer.tree, observer.capture
+        def capture(label):
+            original_capture(label)
+            status["duplicate"] = True
+        def tree(identity=None):
+            values = original_tree(identity)
+            if status.get("duplicate"):
+                # A nonactionable alias cannot be removed by Tap's visibility
+                # filter before the selector checks the whole fresh tree.
+                values.append(node((0, 9), "Skip setup", states=("ENABLED",), actions=("Tap",)))
+            return values
+        observer.capture, observer.tree = capture, tree
+        with self.assertRaisesRegex(RuntimeError, "Ambiguous onboarding Skip setup"):
+            observer.skip_onboarding()
+        self.assertIn(("capture", "onboarding"), status["events"])
+        self.assertEqual(status["actions"], [])
+
+    def test_onboarding_rejects_unrelated_ambiguous_and_unusable_reveal_targets(self):
+        scroll = node((0, 0), states=("VISIBLE", "SHOWING"), actions=("ScrollDown",))
+        headings = [node((0, 0, 0), "Welcome to AetherTune"), node((0, 0, 1), "Set up a local library")]
+        self.assertEqual(ui.onboarding_target([scroll, *headings]), (scroll, "ScrollDown"))
+        cases = [[], [scroll, node((0, 0, 0), "Options"), node((0, 0, 1), "Library")],
+                 [scroll, headings[0]], [scroll, dict(headings[0], path=(0, 0, 2)), headings[0]],
+                 [scroll, *[dict(value, path=(0, 1, index)) for index, value in enumerate(headings)]],
+                 [dict(scroll, states=["VISIBLE", "SHOWING", "SENSITIVE"]), *headings],
+                 [dict(scroll, states=["VISIBLE", "SHOWING", "DEFUNCT"]), *headings],
+                 [dict(scroll, states=[]), *headings], [dict(scroll, actions=[]), *headings],
+                 [scroll, *headings, dict(scroll, path=(0, 1)),
+                  *[dict(value, path=(0, 1, index)) for index, value in enumerate(headings)]],
+                 [node((0, 2), "Skip setup", actions=("Tap",)), node((0, 3), "Skip setup", actions=("Tap",))]]
+        for values in cases:
+            with self.subTest(values=values), self.assertRaises(RuntimeError):
+                ui.onboarding_target(values)
+        for states in (("SENSITIVE",), ("ENABLED", "DEFUNCT")):
+            with self.subTest(states=states), self.assertRaisesRegex(RuntimeError, "disabled or defunct"):
+                ui.onboarding_target([node((0, 2), "Skip setup", states=states, actions=("ShowOnScreen",)),
+                                      scroll, *headings])
+
+    def test_onboarding_reveal_budget_is_four_actions_without_hidden_tap(self):
+        observer, status = self.onboarding_model("ScrollDown", required_reveals=5)
+        with patch.object(ui.time, "sleep"), self.assertRaisesRegex(RuntimeError, "reveal budget exhausted"):
+            observer.skip_onboarding()
+        self.assertEqual(status["actions"], ["ScrollDown"] * ui.MAX_ONBOARDING_REVEALS)
+        self.assertNotIn(("capture", "onboarding"), status["events"])
+
+    def test_onboarding_reveal_revalidates_new_ambiguity_identity_and_disabled_state(self):
+        observer, status = self.onboarding_model("ScrollDown")
+        original_tree = observer.tree
+        def changed_tree(identity=None):
+            values = original_tree(identity)
+            if status["trees"] >= 3:
+                values.extend([node((0, 2), states=("VISIBLE", "SHOWING"), actions=("ScrollDown",)),
+                               node((0, 2, 0), "Welcome to AetherTune"),
+                               node((0, 2, 1), "Set up a local library")])
+            return values
+        observer.tree = changed_tree
+        with self.assertRaisesRegex(RuntimeError, "observed 2"):
+            observer.skip_onboarding()
+        self.assertEqual(status["actions"], [])
+        for changed, message in (({"pid": 13}, "PID binding changed"),
+                                 ({"disabled": True}, "disabled or defunct")):
+            observer, status = self.onboarding_model()
+            found = observer.find("Skip setup", "ShowOnScreen")
+            status.update(changed)
+            with patch.object(observer, "find", return_value=found), self.assertRaisesRegex(RuntimeError, message):
+                observer.act("Skip setup", "ShowOnScreen")
+            self.assertEqual(status["actions"], [])
+
     def test_checkpoint_is_persisted_before_blocking_gi_initialization(self):
         with tempfile.TemporaryDirectory() as directory:
             app = {"pid": 12, "start_ticks": 100, "exe": "/opt/aethertune/aethertune"}
@@ -65,7 +207,7 @@ class ObserverGuards(unittest.TestCase):
             observer.report, observer.app, observer.portal = {}, app, portal
             observer.deadline, observer.last_tree = 3, []
             observer.glib = SimpleNamespace(MainContext=SimpleNamespace(default=lambda: SimpleNamespace(pending=lambda: False)))
-            observer.atspi = SimpleNamespace(get_desktop=lambda index: desktop, Cache=SimpleNamespace(NONE=0),
+            observer.atspi = SimpleNamespace(get_desktop=lambda index: desktop, Cache=SimpleNamespace(STATES=1),
                 StateType=SimpleNamespace(**{key: key for key in ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE",
                                                                 "SELECTED", "FOCUSED", "EDITABLE", "DEFUNCT")}))
             with redirect_stderr(StringIO()), patch.object(ui.time, "monotonic", side_effect=lambda: clock[0]), \
@@ -89,6 +231,91 @@ class ObserverGuards(unittest.TestCase):
             self.assertEqual(saved["last_checkpoint"], report["last_checkpoint"])
             self.assertEqual(set(saved["last_checkpoint"]), {"utc", "monotonic", "label"})
             self.assertNotIn("identity", saved)
+
+    def test_states_only_policy_invalidates_each_snapshot_and_revalidates_action_state(self):
+        # Model libatspi's documented STATES bit contract, not a native positive:
+        # get_state_set records fresh native flags, and subsequent membership
+        # must inspect that snapshot without requiring a remote refresh.
+        with tempfile.TemporaryDirectory() as directory, redirect_stderr(StringIO()):
+            app, portal = {"pid": 12}, {"pid": 13}
+            events, action_calls, policy = [], [], [None]
+            class Accessible:
+                def __init__(self, name, children=()):
+                    self.name, self.children = name, children
+                    self.native = {"VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"}
+                    self.snapshot, self.invalidated = None, False
+                def clear_cache(self):
+                    events.append((self.name, "clear_application"))
+                    self.clear_cache_single()
+                def clear_cache_single(self):
+                    events.append((self.name, "clear_node"))
+                    self.snapshot, self.invalidated = None, True
+                def set_cache_mask(self, value):
+                    events.append((self.name, "mask", value))
+                    policy[0] = value
+                def get_state_set(self):
+                    self_test.assertTrue(self.invalidated, "State read reused an earlier traversal/action snapshot")
+                    self_test.assertEqual(policy[0], "states-only")
+                    events.append((self.name, "fresh_state"))
+                    self.snapshot, self.invalidated = frozenset(self.native), False
+                    return self
+                def contains(self, value):
+                    self_test.assertIsNotNone(self.snapshot, "Membership was evaluated before a fresh native state read")
+                    self_test.assertEqual(policy[0], "states-only", "State membership would require another remote refresh")
+                    events.append((self.name, "membership", value))
+                    return value in self.snapshot
+                def get_process_id(self):
+                    return 12
+                def get_name(self):
+                    return self.name
+                def get_role_name(self):
+                    return "application" if self.children else "push button"
+                def get_child_count(self):
+                    return len(self.children)
+                def get_child_at_index(self, index):
+                    return self.children[index]
+                def get_action_iface(self):
+                    if self.children:
+                        return None
+                    return SimpleNamespace(get_n_actions=lambda: 1, get_action_name=lambda index: "Tap",
+                                           do_action=lambda index: action_calls.append(index) or True)
+            self_test = self
+            button = Accessible("Play")
+            root = Accessible("owned application", [button])
+            desktop = SimpleNamespace(get_child_count=lambda: 1, get_child_at_index=lambda index: root)
+            observer = object.__new__(ui.Observer)
+            observer.args = SimpleNamespace(phase="initial", evidence=Path(directory))
+            observer.report = {"actions": [], "observations": []}
+            observer.app, observer.portal, observer.deadline, observer.last_tree = app, portal, 150, []
+            observer.glib = SimpleNamespace(MainContext=SimpleNamespace(default=lambda: SimpleNamespace(pending=lambda: False)))
+            observer.atspi = SimpleNamespace(get_desktop=lambda index: desktop,
+                Cache=SimpleNamespace(NONE="none", STATES="states-only", ALL="all"),
+                StateType=SimpleNamespace(**{key: key for key in ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE",
+                                                                "SELECTED", "FOCUSED", "EDITABLE", "DEFUNCT")}))
+            with patch.object(ui.time, "monotonic", return_value=0), \
+                    patch.object(ui, "process_identity", side_effect=lambda pid: app if pid == 12 else portal):
+                first = unique_button(observer.tree())
+                self.assertTrue(ui.actionable(first, "Tap"))
+                button.native.remove("ENABLED")
+                second = unique_button(observer.tree())
+                self.assertNotIn("ENABLED", second["states"])
+                self.assertIn("SENSITIVE", second["states"])
+                self.assertFalse(ui.actionable(second, "Tap"))
+                # Simulate a real change after find and before action validation.
+                button.native.add("ENABLED")
+                before_race = unique_button(observer.tree())
+                button.native.remove("ENABLED")
+                with patch.object(observer, "find", return_value=before_race):
+                    with self.assertRaisesRegex(RuntimeError, "disabled or defunct"):
+                        observer.act("Play")
+            self.assertEqual(action_calls, [])
+            self.assertEqual([event[2] for event in events if event[1] == "mask"], ["states-only"] * 3)
+            for name in ("owned application", "Play"):
+                operations = [event[1] for event in events if event[0] == name]
+                for index, operation in enumerate(operations):
+                    if operation == "fresh_state":
+                        self.assertEqual(operations[index-1], "clear_node")
+            self.assertEqual([event for event in events if event[:2] == ("Play", "fresh_state")], [("Play", "fresh_state")] * 4)
 
     def test_navigation_uses_actual_selected_semantics_and_rejects_aliases(self):
         home = node((0, 1), "Home\nTab 1 of 6", states=("VISIBLE", "SHOWING", "ENABLED", "SELECTED"), actions=("Tap",))
@@ -223,6 +450,10 @@ class ObserverGuards(unittest.TestCase):
         observer.tree = lambda identity=None: []
         with self.assertRaisesRegex(RuntimeError, "observed 0"):
             observer.act("Play")
+
+
+def unique_button(nodes):
+    return ui.unique([value for value in nodes if value["name"] == "Play"], "fixture button")
 
 
 if __name__ == "__main__":
