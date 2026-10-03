@@ -378,6 +378,99 @@ class OrdinaryBehaviorTest(unittest.TestCase):
         with patch.object(gate, "process_header", return_value=None):
             self.assertFalse(gate.generation_alive(record))
 
+    def mpris_fixture(self, metadata, can_seek=True, failure=None, foreign_owner=False):
+        identity = {"pid": 42, "start_ticks": 7, "exe": "/opt/aethertune/aethertune"}
+        app = SimpleNamespace(handle=SimpleNamespace(pid=42, poll=lambda: None), identity=identity)
+        track_id = "/org/mpris/MediaPlayer2/TrackList/known_fixture"
+        state = {"predicates": {"fixture_mpris_track_id_sha256": hashlib.sha256(track_id.encode()).hexdigest()}}
+        bus = object.__new__(gate.PrivateBus)
+        bus.GLib = SimpleNamespace(Error=type("RemoteError", (RuntimeError,), {}))
+        bus.pid = Mock(side_effect=[42, 99] if foreign_owner else None, return_value=42)
+        calls = []
+        def call(destination, path, interface, method, signature=None, arguments=()):
+            calls.append((method, arguments))
+            if method == "Get":
+                name = arguments[1]
+                if name == failure:
+                    raise RuntimeError("owned partial-read boundary")
+                return (metadata if name == "Metadata" else can_seek,)
+            # Stop after valid metadata without fabricating native transport/output.
+            raise RuntimeError("owned transport boundary")
+        bus.call = call
+        return bus, app, state, identity, track_id, calls
+
+    def test_mpris_duration_or_seek_failure_retains_bounded_observed_values_without_metadata(self):
+        secret = "https://foreign.invalid/?credential=must-not-export"
+        missing = object()
+        cases = [(0, True), (178_999_999, True), (181_000_001, True), (missing, True),
+                 (180_000_000, False), (180_000_000, 1), (180_000_000, secret),
+                 (secret, True), (float("nan"), True), (float("inf"), True), (2 ** 100, True)]
+        for index, (length, can_seek) in enumerate(cases):
+            with self.subTest(index=index):
+                track_id = "/org/mpris/MediaPlayer2/TrackList/known_fixture"
+                metadata = {"mpris:trackid": track_id, "xesam:url": secret, "foreign": {"credential": secret}}
+                if length is not missing:
+                    metadata["mpris:length"] = length
+                bus, app, state, identity, _, calls = self.mpris_fixture(metadata, can_seek)
+                with patch.object(gate, "process_identity", return_value=identity), self.assertRaises((RuntimeError, TypeError)):
+                    gate.mpris_behavior(bus, app, state, self.root, "initial", {})
+                receipt = json.loads((self.root / "mpris-initial.json").read_text())
+                self.assertEqual(receipt["result"], "FAIL")
+                self.assertEqual(receipt["samples"], [])
+                observed = receipt["metadata_observations"][-1]
+                self.assertTrue(observed["fixture_track_match"])
+                self.assertTrue(observed["metadata_read"])
+                self.assertTrue(observed["length"]["read"])
+                self.assertEqual(observed["length"]["present"], length is not missing)
+                self.assertTrue(observed["can_seek"]["read"])
+                self.assertIn("metadata_observed_utc", observed)
+                self.assertIn("can_seek_observed_utc", observed)
+                if length is missing:
+                    self.assertEqual(observed["length"]["type"], "absent")
+                elif type(length) is int and -(2 ** 63) <= length <= 2 ** 63 - 1:
+                    self.assertEqual(observed["length"]["value"], length)
+                else:
+                    self.assertIsNone(observed["length"]["value"])
+                    self.assertFalse(observed["length"]["value_supported"])
+                self.assertNotIn(secret, json.dumps(receipt))
+                self.assertNotIn(track_id, json.dumps(receipt))
+                self.assertEqual([arguments[1] for method, arguments in calls], ["Metadata", "CanSeek"])
+
+    def test_mpris_partial_reads_or_changed_owner_preserve_failure_receipt_before_transport(self):
+        track_id = "/org/mpris/MediaPlayer2/TrackList/known_fixture"
+        metadata = {"mpris:trackid": track_id, "mpris:length": 180_000_000}
+        for failure, foreign_owner in (("Metadata", False), ("CanSeek", False), (None, True)):
+            with self.subTest(failure=failure, foreign_owner=foreign_owner):
+                bus, app, state, identity, _, calls = self.mpris_fixture(metadata, failure=failure, foreign_owner=foreign_owner)
+                with patch.object(gate, "process_identity", return_value=identity), self.assertRaises(RuntimeError):
+                    gate.mpris_behavior(bus, app, state, self.root, "initial", {})
+                receipt = json.loads((self.root / "mpris-initial.json").read_text())
+                self.assertEqual(receipt["result"], "FAIL")
+                observed = receipt["metadata_observations"][-1]
+                self.assertEqual(observed["metadata_read"], failure == "CanSeek")
+                self.assertFalse(observed["can_seek"]["read"])
+                if failure == "CanSeek":
+                    self.assertEqual(observed["length"]["value"], 180_000_000)
+                    self.assertTrue(observed["fixture_track_match"])
+                self.assertTrue(all(method == "Get" for method, arguments in calls))
+                if foreign_owner:
+                    self.assertEqual(calls, [])
+
+    def test_valid_mpris_metadata_retains_observations_before_existing_transport_boundary(self):
+        track_id = "/org/mpris/MediaPlayer2/TrackList/known_fixture"
+        bus, app, state, identity, _, calls = self.mpris_fixture({"mpris:trackid": track_id, "mpris:length": 180_000_000})
+        with patch.object(gate, "process_identity", return_value=identity), self.assertRaisesRegex(RuntimeError, "transport boundary"):
+            gate.mpris_behavior(bus, app, state, self.root, "initial", {})
+        receipt = json.loads((self.root / "mpris-initial.json").read_text())
+        self.assertEqual(receipt["result"], "FAIL")
+        self.assertEqual(receipt["fixture_track_id_sha256"], state["predicates"]["fixture_mpris_track_id_sha256"])
+        observed = receipt["metadata_observations"][-1]
+        self.assertEqual(observed["length"]["value"], 180_000_000)
+        self.assertEqual(observed["length"]["type"], "int")
+        self.assertIs(observed["can_seek"]["value"], True)
+        self.assertEqual(observed["can_seek"]["type"], "bool")
+        self.assertEqual([method for method, arguments in calls], ["Get", "Get", "Pause"])
+
     def test_glib_runtimeerror_subclass_retries_only_actual_missing_remote_name(self):
         class RemoteError(RuntimeError):
             def __init__(self, remote):

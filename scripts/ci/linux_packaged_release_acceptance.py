@@ -815,12 +815,40 @@ def mpris_behavior(bus, app, state, evidence, phase, env):
                 return
             time.sleep(0.1)
         raise RuntimeError(f"MPRIS did not become {expected}")
+    def scalar_observation(value):
+        # Metadata may contain URLs or credentials. Retain only finite bounded
+        # numeric/bool/null scalars, never string/container values or reprs.
+        known = (type(None), bool, int, float, str, bytes, list, tuple, dict)
+        supported = value is None or type(value) is bool or (
+            type(value) in (int, float) and -(2 ** 63) <= value <= 2 ** 63 - 1)
+        return {"read": True, "type": type(value).__name__ if type(value) in known else "other",
+                "value": value if supported else None, "value_supported": supported}
     def metadata():
+        unread = {"read": False, "type": "unread", "value": None, "value_supported": False}
+        observation = {"started_utc": datetime.now(timezone.utc).isoformat(), "metadata_read": False,
+                       "metadata_type": "unread", "length": dict(unread, present=False),
+                       "can_seek": dict(unread), "track_id_present": False, "track_id_type": "unread",
+                       "fixture_track_match": None}
+        result["metadata_observations"] = (result.get("metadata_observations", []) + [observation])[-8:]
         data = prop("Metadata")
+        observation.update(metadata_read=True, metadata_type=scalar_observation(data)["type"],
+                           metadata_observed_utc=datetime.now(timezone.utc).isoformat())
+        if isinstance(data, dict):
+            present = "mpris:length" in data
+            observation["length"] = (dict(scalar_observation(data["mpris:length"]), present=True) if present else
+                                     dict(unread, read=True, type="absent", present=False))
+            track = data.get("mpris:trackid")
+            observation.update(track_id_present="mpris:trackid" in data, track_id_type=scalar_observation(track)["type"])
+            if isinstance(track, str):
+                observation["fixture_track_match"] = hashlib.sha256(track.encode()).hexdigest() == state["predicates"]["fixture_mpris_track_id_sha256"]
+        write_json(evidence / f"mpris-{phase}.json", result)
         require(isinstance(data, dict) and isinstance(data.get("mpris:trackid"), str), "MPRIS metadata is absent")
         require(hashlib.sha256(data["mpris:trackid"].encode()).hexdigest() == state["predicates"]["fixture_mpris_track_id_sha256"],
                 "MPRIS does not reference the independently observed imported track")
-        require(179_000_000 <= data.get("mpris:length", 0) <= 181_000_000 and prop("CanSeek") is True, "MPRIS fixture duration/seek capability differs")
+        can_seek = prop("CanSeek")
+        observation.update(can_seek=scalar_observation(can_seek), can_seek_observed_utc=datetime.now(timezone.utc).isoformat())
+        write_json(evidence / f"mpris-{phase}.json", result)
+        require(179_000_000 <= data.get("mpris:length", 0) <= 181_000_000 and can_seek is True, "MPRIS fixture duration/seek capability differs")
         return data["mpris:trackid"]
     result = {"result": "FAIL", "phase": phase, "binding": binding, "samples": [],
               "sink": "private PulseAudio null sink; physical audio is excluded"}
