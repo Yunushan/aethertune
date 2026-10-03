@@ -26,6 +26,32 @@ DBusObjectPath mprisPlaylistPathForId(String mediaId) {
   return DBusObjectPath.unchecked('$_playlistsPathPrefix$encoded');
 }
 
+typedef MprisSeekHandler = Future<MprisPlaybackSnapshot> Function(Duration, String);
+
+/// An authoritative snapshot returned after the application completes a seek.
+class MprisPlaybackSnapshot {
+  const MprisPlaybackSnapshot({
+    required this.mediaId,
+    required this.position,
+    required this.updateTime,
+    required this.playing,
+    required this.ready,
+    required this.speed,
+  });
+
+  final String mediaId;
+  final Duration position;
+  final DateTime updateTime;
+  final bool playing;
+  final bool ready;
+  final double speed;
+}
+
+Duration Function() _monotonicClock() {
+  final watch = Stopwatch()..start();
+  return () => watch.elapsed;
+}
+
 class MprisTrack {
   const MprisTrack({required this.mediaId, required this.metadata});
 
@@ -87,13 +113,96 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   final List<MprisPlaylist> _playlists = <MprisPlaylist>[];
   String? _activePlaylistId;
 
-  var position = const Duration(seconds: 0);
+  final Duration Function() _monotonicNow;
+  final DateTime Function() _now;
+  Duration _positionAnchor = Duration.zero;
+  Duration _positionAnchorTime = Duration.zero;
+  bool _advancing = false;
+  bool _ready = true;
+  bool _seekInFlight = false;
+  int _trackGeneration = 0;
+
+  /// Native requests use an awaited application callback, never the request
+  /// position itself as evidence that the decoder completed a seek.
+  MprisSeekHandler? _seekHandler;
+  MprisSeekHandler? get seekHandler => _seekHandler;
+  set seekHandler(MprisSeekHandler? handler) {
+    _seekHandler = handler;
+    _publishCanSeek();
+  }
+
+  bool _publishedCanSeek = false;
+  void _publishCanSeek() {
+    final value = getCanSeek().value;
+    if (value == _publishedCanSeek) return;
+    _publishedCanSeek = value;
+    emitPropertiesChanged('org.mpris.MediaPlayer2.Player',
+        changedProperties: <String, DBusValue>{'CanSeek': DBusBoolean(value)});
+  }
 
   /// Creates a new object to expose on [path].
-  OrgMprisMediaPlayer2(
-      {DBusObjectPath path = const DBusObjectPath.unchecked('/'),
-      required this.identity})
-      : super(path);
+  OrgMprisMediaPlayer2({
+    DBusObjectPath path = const DBusObjectPath.unchecked('/'),
+    required this.identity,
+    Duration Function()? monotonicNow,
+    DateTime Function()? now,
+  })  : _monotonicNow = monotonicNow ?? _monotonicClock(),
+        _now = now ?? DateTime.now,
+        super(path) {
+    _positionAnchorTime = _monotonicNow();
+  }
+
+  Duration _boundedPosition(Duration value) {
+    if (value.isNegative) return Duration.zero;
+    final length = _metadata.length;
+    if (length != null && !length.isNegative && value > length) return length;
+    return value;
+  }
+
+  Duration get position {
+    final elapsed = _monotonicNow() - _positionAnchorTime;
+    final advance = _advancing && !elapsed.isNegative
+        ? Duration(microseconds: (elapsed.inMicroseconds * _rate).round())
+        : Duration.zero;
+    return _boundedPosition(_positionAnchor + advance);
+  }
+
+  set position(Duration value) {
+    _positionAnchor = _boundedPosition(value);
+    _positionAnchorTime = _monotonicNow();
+  }
+
+  /// Translate the authoritative wall timestamp once, then advance with a
+  /// monotonic clock. Position is read on demand; it is never a changed property.
+  void updatePlayback({
+    required Duration position,
+    required DateTime updateTime,
+    required bool playing,
+    required bool ready,
+    required double speed,
+    bool stopped = false,
+  }) {
+    if (!speed.isFinite || speed < 0.5 || speed > 3 || position.isNegative) {
+      throw ArgumentError('Invalid authoritative playback snapshot');
+    }
+    updateRate(speed);
+    playbackState = stopped ? 'Stopped' : (playing ? 'Playing' : 'Paused');
+    _ready = ready;
+    _advancing = playing && ready && !stopped;
+    final age = _now().difference(updateTime);
+    this.position = position +
+        (_advancing && !age.isNegative
+            ? Duration(microseconds: (age.inMicroseconds * speed).round())
+            : Duration.zero);
+    _publishCanSeek();
+  }
+
+  String? get _currentMediaId {
+    final path = _metadata.trackId;
+    if (path == null || path == _noTrackPath) return null;
+    final matches = _tracks.where((track) => track.path == path).toList();
+    return matches.length == 1 ? matches.single.mediaId : null;
+  }
 
   /// Gets value of property org.mpris.MediaPlayer2.CanQuit
   DBusBoolean getCanQuit() {
@@ -161,6 +270,8 @@ class OrgMprisMediaPlayer2 extends DBusObject {
 
   set playbackState(String state) {
     if (state == _playbackState) return;
+    position = position;
+    _advancing = state == 'Playing' && _ready;
 
     emitPropertiesChanged(
       "org.mpris.MediaPlayer2.Player",
@@ -237,21 +348,20 @@ class OrgMprisMediaPlayer2 extends DBusObject {
 
   /// Sets property org.mpris.MediaPlayer2.Player.Rate
   Future<DBusMethodResponse> setRate(double value) async {
-    if (value < 0.5 || value > 3) {
+    if (value == 0) return doPause();
+    if (!value.isFinite || value < 0.5 || value > 3) {
       return DBusMethodErrorResponse.invalidArgs();
     }
     if (value == _rate) return DBusMethodSuccessResponse([]);
-    _rate = value;
-    emitPropertiesChanged(
-      'org.mpris.MediaPlayer2.Player',
-      changedProperties: <String, DBusValue>{'Rate': DBusDouble(value)},
-    );
+    // A requested speed is not an authoritative playback snapshot. The
+    // application publishes the confirmed rate through updatePlayback.
     _rateStreamController.add(value);
     return DBusMethodSuccessResponse([]);
   }
 
   void updateRate(double value) {
-    if (value < 0.5 || value > 3 || value == _rate) return;
+    if (!value.isFinite || value < 0.5 || value > 3 || value == _rate) return;
+    position = position;
     _rate = value;
     emitPropertiesChanged(
       'org.mpris.MediaPlayer2.Player',
@@ -266,11 +376,18 @@ class OrgMprisMediaPlayer2 extends DBusObject {
   Metadata get metadata => _metadata;
   set metadata(Metadata metadata) {
     if (metadata == _metadata) return;
+    if (metadata.trackId != _metadata.trackId) {
+      _trackGeneration++;
+      _advancing = false;
+      _ready = false;
+      position = Duration.zero;
+    }
     emitPropertiesChanged(
       "org.mpris.MediaPlayer2.Player",
       changedProperties: {"Metadata": metadata.toValue()},
     );
     _metadata = metadata;
+    _publishCanSeek();
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.Metadata
@@ -346,7 +463,8 @@ class OrgMprisMediaPlayer2 extends DBusObject {
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.CanSeek
   DBusBoolean getCanSeek() {
-    return const DBusBoolean(true);
+    return DBusBoolean(
+        seekHandler != null && _currentMediaId != null && _ready);
   }
 
   /// Gets value of property org.mpris.MediaPlayer2.Player.CanControl
@@ -392,17 +510,72 @@ class OrgMprisMediaPlayer2 extends DBusObject {
 
   /// Implementation of org.mpris.MediaPlayer2.Player.Seek()
   Future<DBusMethodResponse> doSeek(int offset) async {
+    if (!getCanSeek().value) return DBusMethodSuccessResponse([]);
     final target = position + Duration(microseconds: offset);
-    position = target.isNegative ? Duration.zero : target;
-    _positionStreamController.add(position);
-    return DBusMethodSuccessResponse([]);
+    final length = _metadata.length;
+    if (length != null && target > length) return doNext();
+    return _seek(target.isNegative ? Duration.zero : target);
   }
 
   /// Implementation of org.mpris.MediaPlayer2.Player.SetPosition()
   Future<DBusMethodResponse> doSetPosition(String trackId, int position) async {
-    this.position = Duration(microseconds: position);
-    _positionStreamController.add(this.position);
-    return DBusMethodSuccessResponse([]);
+    if (!getCanSeek().value) return DBusMethodSuccessResponse([]);
+    final length = _metadata.length;
+    if (_currentMediaId == null ||
+        trackId != _metadata.trackId?.value ||
+        position < 0 ||
+        (length != null && position > length.inMicroseconds)) {
+      return DBusMethodSuccessResponse([]);
+    }
+    return _seek(Duration(microseconds: position));
+  }
+
+  Future<DBusMethodResponse> _seek(Duration target) async {
+    final handler = seekHandler;
+    final mediaId = _currentMediaId;
+    final trackPath = _metadata.trackId;
+    final generation = _trackGeneration;
+    if (handler == null || mediaId == null || !_ready || _seekInFlight) {
+      return DBusMethodErrorResponse.failed('No available seek handler');
+    }
+    _seekInFlight = true;
+    final started = _now();
+    try {
+      // Preserve the public request stream, but native dispatch awaits the
+      // handler directly; the adapter must not dispatch this stream again.
+      if (_positionStreamController.hasListener) {
+        _positionStreamController.add(target);
+      }
+      final snapshot = await handler(target, mediaId);
+      final length = _metadata.length;
+      if (_trackGeneration != generation ||
+          _metadata.trackId != trackPath ||
+          _currentMediaId != mediaId ||
+          snapshot.mediaId != mediaId ||
+          !snapshot.ready ||
+          snapshot.updateTime.isBefore(started) ||
+          snapshot.updateTime.isAfter(_now()) ||
+          snapshot.position.isNegative ||
+          (length != null && snapshot.position > length) ||
+          !snapshot.speed.isFinite ||
+          snapshot.speed < 0.5 ||
+          snapshot.speed > 3) {
+        return DBusMethodErrorResponse.failed(
+            'Seek confirmation is stale or invalid');
+      }
+      updatePlayback(
+          position: snapshot.position,
+          updateTime: snapshot.updateTime,
+          playing: snapshot.playing,
+          ready: snapshot.ready,
+          speed: snapshot.speed);
+      await emitSeeked(snapshot.position);
+      return DBusMethodSuccessResponse([]);
+    } catch (_) {
+      return DBusMethodErrorResponse.failed('Application seek failed');
+    } finally {
+      _seekInFlight = false;
+    }
   }
 
   /// Implementation of org.mpris.MediaPlayer2.Player.OpenUri()
@@ -431,6 +604,7 @@ class OrgMprisMediaPlayer2 extends DBusObject {
         ],
       ),
     );
+    _publishCanSeek();
   }
 
   DBusArray getTracks() =>
@@ -757,7 +931,7 @@ class OrgMprisMediaPlayer2 extends DBusObject {
         if (methodCall.signature != DBusSignature('ox')) {
           return DBusMethodErrorResponse.invalidArgs();
         }
-        return doSetPosition(methodCall.values[0].asObjectPath().toString(),
+        return doSetPosition(methodCall.values[0].asObjectPath().value,
             methodCall.values[1].asInt64());
       } else if (methodCall.name == 'OpenUri') {
         if (methodCall.signature != DBusSignature('s')) {

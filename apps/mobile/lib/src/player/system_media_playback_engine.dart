@@ -39,8 +39,9 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       _publishState();
     });
     _indexSubscription = _engine.currentIndexStream.listen((index) {
+      // A seek can repeat the index without repeating the duration event.
+      if (index != _currentIndex) _runtimeDuration = null;
       _currentIndex = index;
-      _runtimeDuration = null;
       _publishQueueAndCurrentItem();
       _publishState();
     });
@@ -100,6 +101,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   int? _currentIndex;
+  int _queueGeneration = 0;
   Duration? _runtimeDuration;
   Duration? _lastWidgetProgressPosition;
   DateTime? _sleepTimerEndsAt;
@@ -222,6 +224,7 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     required int initialIndex,
     Duration initialPosition = Duration.zero,
   }) async {
+    _queueGeneration++;
     final previousTracks = List<Track>.from(_tracks);
     final previousIndex = _currentIndex;
     _tracks
@@ -360,6 +363,42 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
     String name, [
     Map<String, dynamic>? extras,
   ]) async {
+    if (name == 'dbusSeek') {
+      final generation = _queueGeneration;
+      final expectedMediaId = extras?['mediaId'];
+      final positionUs = extras?['positionUs'];
+      String? currentMediaId() {
+        final index = _currentIndex;
+        return index != null && index >= 0 && index < _tracks.length
+            ? _tracks[index].id
+            : null;
+      }
+
+      final item = mediaItem.value;
+      if (expectedMediaId is! String ||
+          positionUs is! int ||
+          positionUs < 0 ||
+          currentMediaId() != expectedMediaId ||
+          (item?.duration != null &&
+              positionUs > item!.duration!.inMicroseconds)) {
+        throw StateError('Invalid or stale MPRIS seek request');
+      }
+      await seek(Duration(microseconds: positionUs));
+      if (_queueGeneration != generation ||
+          currentMediaId() != expectedMediaId) {
+        throw StateError('Track changed during MPRIS seek');
+      }
+      // The decoder has completed the awaited seek. Return its actual state,
+      // not the target requested by the D-Bus caller.
+      return <String, dynamic>{
+        'mediaId': expectedMediaId,
+        'positionUs': _engine.position.inMicroseconds,
+        'updateTimeUs': DateTime.now().microsecondsSinceEpoch,
+        'playing': _engine.playing,
+        'ready': _processingState == ProcessingState.ready,
+        'speed': _engine.speed,
+      };
+    }
     if (name == 'dbusVolume') {
       final value = extras?['value'];
       if (value is num) {
