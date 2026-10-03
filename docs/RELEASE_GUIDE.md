@@ -130,7 +130,11 @@ identifier. App ZIP and DMG submissions require `Accepted` notary results;
 The existing `aethertune-macos-notarization.json` is now schema v2, binding final
 ZIP/DMG hashes, embedded profile and executable/library hashes, per-architecture
 signing observations and accepted submission IDs/input hashes. Submission hashes
-precede stapling; final package hashes follow it. The portable verifier checks
+are independently captured in signing evidence before submission: the app ZIP
+must first match its original signing receipt, and the DMG digest is recorded
+after native signing verification. Notarization rejects changed input bytes
+before submission and its server log must match that recorded digest. Submission
+hashes precede stapling; final package hashes follow it. The portable verifier checks
 this attested receipt's consistency and rejects legacy boolean-only receipts.
 This is not an independent Apple authorization or ordinary runtime proof.
 Ordinary installed launch, real Keychain roundtrips and continuity from a distinct

@@ -534,9 +534,12 @@ jobs:
           bash scripts/ci/sign_macos_app.sh "$app_bundle" "$AETHERTUNE_MACOS_SIGNING_IDENTITY"
           notarization_zip="$RUNNER_TEMP/aethertune-macos-notarization.zip"
           ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$notarization_zip"
+          python3 scripts/ci/macos_signing_contract.py bind-app-input \
+            --archive "$notarization_zip" --signing-receipt "$RUNNER_TEMP/aethertune-macos-signing.json"
           python3 scripts/ci/macos_signing_contract.py notarize \
             --artifact "$notarization_zip" --key "$AETHERTUNE_NOTARY_KEY_PATH" \
             --key-id "$AETHERTUNE_NOTARY_KEY_ID" --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
+            --signing-receipt "$RUNNER_TEMP/aethertune-macos-signing.json" \
             --output "$RUNNER_TEMP/aethertune-macos-app-notarization.json"
           xcrun stapler staple "$app_bundle"
           xcrun stapler validate "$app_bundle"
@@ -588,6 +591,7 @@ jobs:
           python3 scripts/ci/macos_signing_contract.py notarize \
             --artifact release/aethertune-macos.dmg --key "$AETHERTUNE_NOTARY_KEY_PATH" \
             --key-id "$AETHERTUNE_NOTARY_KEY_ID" --issuer "$AETHERTUNE_NOTARY_ISSUER_ID" \
+            --signing-receipt "$RUNNER_TEMP/aethertune-macos-dmg-signing.json" \
             --output "$RUNNER_TEMP/aethertune-macos-dmg-notarization.json"
           xcrun stapler staple release/aethertune-macos.dmg
           xcrun stapler validate release/aethertune-macos.dmg

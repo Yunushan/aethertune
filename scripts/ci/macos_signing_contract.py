@@ -235,8 +235,11 @@ def sign(app: Path, name: str, profile_path: Path, release_path: Path, team: str
 def validate_archive(archive_path: Path, signing: dict) -> None:
     required = {"schema_version", "team_id", "bundle_id", "certificate_sha1", "profile", "main_executable",
                 "main_sha256", "main_slices", "libraries", "release_policy", "native_code_requirement_verified"}
-    require(isinstance(signing, dict) and set(signing) == required and signing["schema_version"] == 1,
+    require(isinstance(signing, dict) and set(signing) in (required, required | {"notarization_input_sha256"})
+            and signing["schema_version"] == 1,
             "missing or fake production signing receipt")
+    if "notarization_input_sha256" in signing:
+        independent_input_digest(signing)
     require(signing["native_code_requirement_verified"] is True, "native code requirement was not verified")
     with zipfile.ZipFile(archive_path) as archive:
         members = archive.infolist()
@@ -374,6 +377,26 @@ def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def independent_input_digest(signing: dict) -> str:
+    value = signing.get("notarization_input_sha256") if isinstance(signing, dict) else None
+    require(isinstance(value, str) and bool(re.fullmatch(r"[0-9a-f]{64}", value)),
+            "independent pre-staple notarization input digest is missing or invalid")
+    return value
+
+
+def bind_app_notarization_input(archive_path: Path, signing_path: Path) -> None:
+    """Record actual submitted ZIP bytes after checking the original signing evidence."""
+    require(archive_path.name == "aethertune-macos-notarization.zip", "unexpected app submission archive name")
+    signing = json.loads(signing_path.read_text())
+    require(isinstance(signing, dict) and "notarization_input_sha256" not in signing,
+            "app signing receipt already has a notarization input binding")
+    before = file_digest(archive_path)
+    validate_archive(archive_path, signing)
+    require(file_digest(archive_path) == before, "app submission archive changed while checking signed payload")
+    signing["notarization_input_sha256"] = before
+    write_json(signing_path, signing)
+
+
 def sign_disk_image(image: Path, name: str, team: str, bundle: str, keychain: str, output: Path) -> None:
     require(sys.platform == "darwin", "real signing requires macOS")
     identity(team, bundle)
@@ -394,7 +417,8 @@ def sign_disk_image(image: Path, name: str, team: str, bundle: str, keychain: st
         certificate = Path(str(prefix) + "0").read_bytes()
     require(hashlib.sha1(certificate).hexdigest() == fingerprint, "disk image certificate mismatch")
     write_json(output, {"team_id": team, "identifier": identifier, "certificate_sha1": fingerprint,
-                        "certificate_sha256": digest(certificate), "signature_verified": True})
+                        "certificate_sha256": digest(certificate), "signature_verified": True,
+                        "notarization_input_sha256": file_digest(image)})
 
 
 def notarization_response(response: dict, artifact_name: str, input_sha256: str) -> dict:
@@ -409,9 +433,11 @@ def notarization_response(response: dict, artifact_name: str, input_sha256: str)
             "submission_id": submission, "status": "Accepted"}
 
 
-def notarize(artifact: Path, key: Path, key_id: str, issuer: str, output: Path) -> None:
+def notarize(artifact: Path, key: Path, key_id: str, issuer: str, output: Path, signing_path: Path) -> None:
     require(sys.platform == "darwin", "real notarization requires macOS")
+    expected = independent_input_digest(json.loads(signing_path.read_text()))
     before = file_digest(artifact)
+    require(before == expected, "notarization artifact differs from independent signed input digest")
     response = json.loads(command(["/usr/bin/xcrun", "notarytool", "submit", str(artifact),
                                   "--key", str(key), "--key-id", key_id, "--issuer", issuer,
                                   "--wait", "--timeout", "20m", "--output-format", "json"], timeout=1300))
@@ -433,11 +459,15 @@ def notarize(artifact: Path, key: Path, key_id: str, issuer: str, output: Path) 
     write_json(output, accepted)
 
 
-def validate_notarization(receipt: dict, artifact_name: str) -> None:
+def validate_notarization(receipt: dict, artifact_name: str, expected_sha256: str) -> None:
+    require(isinstance(expected_sha256, str) and bool(re.fullmatch(r"[0-9a-f]{64}", expected_sha256)),
+            "independent pre-staple notarization input digest is missing or invalid")
     require(isinstance(receipt, dict) and set(receipt) ==
             {"artifact", "input_sha256", "submission_id", "status", "log"}
             and receipt["artifact"] == artifact_name,
             "notarization receipt is not bound to expected input")
+    require(receipt["input_sha256"] == expected_sha256,
+            "notarization receipt does not match independent signed input digest")
     log = receipt["log"]
     require(isinstance(log, dict) and set(log) == {"job_id", "sha256", "status", "archive_filename"}
             and log["job_id"] == receipt["submission_id"] and log["sha256"] == receipt["input_sha256"]
@@ -483,15 +513,18 @@ def validate_package_receipt(release_dir: Path, evidence: dict) -> None:
     image_signing = evidence["disk_image_signing"]
     slice_value = signing["main_slices"]["arm64"]
     require(isinstance(image_signing, dict) and set(image_signing) ==
-            {"team_id", "identifier", "certificate_sha1", "certificate_sha256", "signature_verified"}
+            {"team_id", "identifier", "certificate_sha1", "certificate_sha256", "signature_verified",
+             "notarization_input_sha256"}
             and image_signing["signature_verified"] is True
             and image_signing["team_id"] == signing["team_id"]
             and image_signing["identifier"] == signing["bundle_id"] + ".disk-image"
             and image_signing["certificate_sha1"] == slice_value["certificate_sha1"]
             and image_signing["certificate_sha256"] == slice_value["certificate_sha256"],
             "disk image signing identity mismatch")
-    validate_notarization(evidence["app_notarization"], "aethertune-macos-notarization.zip")
-    validate_notarization(evidence["disk_image_notarization"], dmg.name)
+    validate_notarization(evidence["app_notarization"], "aethertune-macos-notarization.zip",
+                          independent_input_digest(signing))
+    validate_notarization(evidence["disk_image_notarization"], dmg.name,
+                          independent_input_digest(image_signing))
 
 
 def main() -> None:
@@ -514,10 +547,13 @@ def main() -> None:
     for key in ("identity", "team", "bundle", "keychain"):
         p.add_argument("--" + key, required=True)
     p = sub.add_parser("notarize")
-    for key in ("artifact", "key", "output"):
+    for key in ("artifact", "key", "output", "signing-receipt"):
         p.add_argument("--" + key, type=Path, required=True)
     for key in ("key-id", "issuer"):
         p.add_argument("--" + key, required=True)
+    p = sub.add_parser("bind-app-input")
+    for key in ("archive", "signing-receipt"):
+        p.add_argument("--" + key, type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.mode == "sign":
@@ -526,7 +562,9 @@ def main() -> None:
         elif args.mode == "sign-dmg":
             sign_disk_image(args.image, args.identity, args.team, args.bundle, args.keychain, args.output)
         elif args.mode == "notarize":
-            notarize(args.artifact, args.key, args.key_id, args.issuer, args.output)
+            notarize(args.artifact, args.key, args.key_id, args.issuer, args.output, args.signing_receipt)
+        elif args.mode == "bind-app-input":
+            bind_app_notarization_input(args.archive, args.signing_receipt)
         else:
             finalize(args.release_dir, args.signing_receipt, args.dmg_signing_receipt,
                      args.app_notarization_receipt, args.dmg_notarization_receipt)

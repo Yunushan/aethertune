@@ -82,6 +82,12 @@ def write_archive(path: Path, *, main: bytes = MAGIC + b"main", library: bytes =
     return signing
 
 
+def write_input_binding(root: Path, artifact: Path) -> Path:
+    path = root / "input-signing.json"
+    contract.write_json(path, {"notarization_input_sha256": contract.file_digest(artifact)})
+    return path
+
+
 class ProfilePolicyTest(unittest.TestCase):
     def test_matching_profile_retains_sandbox_network_files_and_data_protection_keychain(self):
         actual = contract.validate_profile(profile(), TEAM, BUNDLE, FINGERPRINT, policy())
@@ -318,6 +324,47 @@ class SigningOrderTest(unittest.TestCase):
 
 
 class NotarizationTest(unittest.TestCase):
+    def test_app_input_digest_is_recorded_from_zip_verified_against_original_signing_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "aethertune-macos-notarization.zip"
+            original = write_archive(archive)
+            signing_path = root / "signing.json"; contract.write_json(signing_path, original)
+            contract.bind_app_notarization_input(archive, signing_path)
+            actual = json.loads(signing_path.read_text())
+            self.assertEqual(actual.pop("notarization_input_sha256"), contract.file_digest(archive))
+            self.assertEqual(actual, original)
+            with self.assertRaisesRegex(ValueError, "already"):
+                contract.bind_app_notarization_input(archive, signing_path)
+
+    def test_app_input_binding_rejects_changed_code_without_writing_digest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "aethertune-macos-notarization.zip"
+            original = write_archive(archive)
+            signing_path = root / "signing.json"; contract.write_json(signing_path, original)
+            write_archive(archive, main=MAGIC + b"different code")
+            with self.assertRaisesRegex(ValueError, "executable hash"):
+                contract.bind_app_notarization_input(archive, signing_path)
+            self.assertEqual(json.loads(signing_path.read_text()), original)
+
+    def test_changed_or_missing_independent_input_is_rejected_before_notarytool(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact = root / "fixture.dmg"; artifact.write_bytes(b"signed original")
+            signing_path = write_input_binding(root, artifact)
+            artifact.write_bytes(b"replaced before submission")
+            with patch.object(contract.sys, "platform", "darwin"), patch.object(contract, "command") as command:
+                with self.assertRaisesRegex(ValueError, "independent signed input digest"):
+                    contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json", signing_path)
+                command.assert_not_called()
+            contract.write_json(signing_path, {})
+            with patch.object(contract.sys, "platform", "darwin"), patch.object(contract, "command") as command:
+                with self.assertRaisesRegex(ValueError, "missing or invalid"):
+                    contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json", signing_path)
+                command.assert_not_called()
+            self.assertFalse((root / "receipt.json").exists())
+
     def test_notary_acceptance_is_bound_to_unchanged_submitted_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -327,7 +374,8 @@ class NotarizationTest(unittest.TestCase):
                    "sha256": contract.digest(b"signed fixture")}
             with patch.object(contract.sys, "platform", "darwin"), patch.object(
                     contract, "command", side_effect=[json.dumps(response).encode(), json.dumps(log).encode()]) as command:
-                contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json")
+                contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json",
+                                  write_input_binding(root, artifact))
             receipt = json.loads((root / "receipt.json").read_text())
             self.assertEqual(receipt["input_sha256"], contract.digest(b"signed fixture"))
             self.assertEqual(receipt["submission_id"], response["id"])
@@ -348,12 +396,16 @@ class NotarizationTest(unittest.TestCase):
                                                ("Accepted", "12345678-1234-1234-1234-123456789abc", True)):
                 artifact.write_bytes(b"signed fixture")
                 def fake(args, **kwargs):
+                    if args[2] == "log":
+                        return json.dumps({"status": "Accepted", "jobId": submission,
+                                           "sha256": contract.digest(b"signed fixture")}).encode()
                     if mutate:
                         artifact.write_bytes(b"substituted fixture")
                     return json.dumps({"status": status, "id": submission}).encode()
                 with patch.object(contract.sys, "platform", "darwin"), patch.object(contract, "command", fake):
                     with self.subTest(status=status, mutate=mutate), self.assertRaises(ValueError):
-                        contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json")
+                        contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json",
+                                          write_input_binding(root, artifact))
                 self.assertFalse((root / "receipt.json").exists())
 
     def test_server_notary_log_job_status_or_hash_mismatch_is_rejected(self):
@@ -369,7 +421,8 @@ class NotarizationTest(unittest.TestCase):
                 with patch.object(contract.sys, "platform", "darwin"), patch.object(
                         contract, "command", side_effect=[json.dumps(response).encode(), json.dumps(log).encode()]):
                     with self.subTest(key=key), self.assertRaisesRegex(ValueError, "log"):
-                        contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json")
+                        contract.notarize(artifact, root / "unused.p8", "KEYID", "ISSUER", root / "receipt.json",
+                                          write_input_binding(root, artifact))
                 self.assertFalse((root / "receipt.json").exists())
 
     def test_dmg_signer_has_timestamp_identifier_no_entitlements_and_verifies_same_identity(self):
@@ -395,6 +448,8 @@ class NotarizationTest(unittest.TestCase):
             self.assertIn("--identifier", mutation)
             self.assertNotIn("--entitlements", mutation)
             self.assertTrue(any("--verify" in args and "-R" in args for args in calls))
+            receipt = json.loads((root / "receipt.json").read_text())
+            self.assertEqual(receipt["notarization_input_sha256"], contract.file_digest(image))
 
 
 if __name__ == "__main__":

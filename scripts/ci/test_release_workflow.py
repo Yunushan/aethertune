@@ -292,6 +292,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(dmg_step.index("macos_signing_contract.py sign-dmg"),
                         dmg_step.index("macos_signing_contract.py notarize"))
         self.assertLess(dmg_step.index("stapler validate"), dmg_step.index("macos_signing_contract.py finalize"))
+        self.assertIn('--signing-receipt "$RUNNER_TEMP/aethertune-macos-dmg-signing.json"', dmg_step)
+        app_step = workflow.split("      - name: Sign and notarize macOS production app\n", 1)[1].split("      - name:", 1)[0]
+        self.assertLess(app_step.index("ditto -c -k"), app_step.index("macos_signing_contract.py bind-app-input"))
+        self.assertLess(app_step.index("macos_signing_contract.py bind-app-input"),
+                        app_step.index("macos_signing_contract.py notarize"))
+        self.assertIn('--signing-receipt "$RUNNER_TEMP/aethertune-macos-signing.json"', app_step)
         for name in ("PROVISIONING_PROFILE_BASE64", "PROVISIONING_PROFILE_SHA256", "TEAM_ID", "BUNDLE_ID"):
             self.assertIn("AETHERTUNE_MACOS_" + name, workflow)
         self.assertLess(
