@@ -44,7 +44,9 @@ class DesktopNavigationShortcutScope extends StatelessWidget {
           const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
               onNextDestination,
         },
-        child: Focus(autofocus: true, child: child),
+        // Setup retains an ancestor's focus. A local scope gives this shell its
+        // own initial autofocus while remembering focused editors on rebuild.
+        child: FocusScope(child: Focus(autofocus: true, child: child)),
       ),
     );
   }
