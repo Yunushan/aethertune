@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import ctypes as C
 from datetime import datetime, timezone
+import faulthandler
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -22,11 +23,38 @@ from linux_packaged_release_acceptance import X11, file_hash, process_identity, 
 
 DESTINATIONS = ("Home", "Library", "Playlists", "History", "Sources", "Options")
 MAX_NODES, MAX_DEPTH = 1800, 48
+OBSERVER_SECONDS, TRACEBACK_SECONDS, MAX_CHECKPOINTS = 150, 30, 128
 SCROLL_ACTIONS = frozenset(("ScrollLeft", "ScrollRight", "ScrollUp", "ScrollDown", "ShowOnScreen"))
 
 
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
+
+
+def checkpoint(args, report, label):
+    # Fixed stage names only: no accessible text, arguments, locals or memory.
+    item = {"utc": timestamp(), "monotonic": time.monotonic(), "label": label}
+    report["checkpoint_count"] = report.get("checkpoint_count", 0) + 1
+    history = report.setdefault("checkpoints", [])
+    if len(history) < MAX_CHECKPOINTS:
+        history.append(item)
+    report["last_checkpoint"] = item
+    progress = {"schema_version": 1, "result": "IN_PROGRESS", "phase": args.phase,
+                "checkpoint_count": report["checkpoint_count"], "last_checkpoint": item}
+    path = args.evidence / f"behavior-{args.phase}-progress.json"
+    with path.open("w", encoding="utf-8") as output:
+        json.dump(progress, output, sort_keys=True)
+        output.write("\n")
+        output.flush()
+        os.fsync(output.fileno())
+    print(json.dumps(progress, sort_keys=True), file=sys.stderr, flush=True)
+
+
+def load_atspi():
+    import gi
+    gi.require_version("Atspi", "2.0")
+    from gi.repository import Atspi, GLib
+    return Atspi, GLib
 
 
 def unique(items, purpose):
@@ -130,9 +158,11 @@ class NativeKeys(X11):
         self.xtst.XTestFakeKeyEvent.restype = C.c_int
         self.xtst.XTestFakeKeyEvent.argtypes = [C.c_void_p, C.c_uint, C.c_int, C.c_ulong]
 
-    def windows(self, pid, title):
+    def windows(self, pid, title, bound=None):
         found, pending, count = [], [self.lib.XDefaultRootWindow(self.display)], 0
         while pending:
+            if bound is not None:
+                bound()
             window = pending.pop()
             count += 1
             require(count <= 2048, "Private window inventory exceeds bound")
@@ -146,6 +176,8 @@ class NativeKeys(X11):
                 pending.extend(children[:size.value])
             if children:
                 self.lib.XFree(children)
+            if bound is not None:
+                bound()
         return found
 
     def assert_focus(self, window, identity):
@@ -185,17 +217,38 @@ class NativeKeys(X11):
 
 class Observer:
     def __init__(self, args, report):
-        import gi
-        gi.require_version("Atspi", "2.0")
-        from gi.repository import Atspi, GLib
-        self.atspi, self.glib = Atspi, GLib
-        Atspi.set_timeout(1500, 4000)
-        require(Atspi.init() == 0, "Cannot initialize the private AT-SPI client")
-        self.args, self.report, self.x11 = args, report, NativeKeys()
+        self.args, self.report = args, report
         self.app, self.portal = json.loads(args.identity), json.loads(args.portal_identity)
-        self.deadline = time.monotonic() + 150
-        self.last_tree = []
-        self.window = None
+        # Establish this before importing/initializing potentially blocking native
+        # libraries. The coordinator still owns the separate 180-second child bound.
+        self.deadline = time.monotonic() + OBSERVER_SECONDS
+        self.last_tree, self.window, self.x11 = [], None, None
+        self.checkpoint("before GI import")
+        self.bound()
+        self.atspi, self.glib = load_atspi()
+        self.bound()
+        self.checkpoint("before AT-SPI timeout configuration")
+        self.remote(self.atspi.set_timeout, 1500, 4000)
+        self.checkpoint("before AT-SPI client initialization")
+        require(self.remote(self.atspi.init) == 0, "Cannot initialize the private AT-SPI client")
+        self.checkpoint("before native X11 setup")
+        self.x11 = self.remote(NativeKeys)
+        self.checkpoint("native observer initialized")
+
+    def checkpoint(self, label):
+        checkpoint(self.args, self.report, label)
+
+    def remote(self, function, *args):
+        # A node can need many remote calls. Bound each call rather than letting
+        # the rest of a traversal continue after one consumes the phase budget.
+        self.bound()
+        result = function(*args)
+        self.bound()
+        return result
+
+    def windows(self, identity, title):
+        self.bound()
+        return self.x11.windows(identity["pid"], title, bound=self.bound)
 
     def bound(self):
         require(time.monotonic() < self.deadline, "Native observer exceeded its overall bound")
@@ -208,42 +261,52 @@ class Observer:
     def tree(self, identity=None):
         self.bound()
         identity = identity or self.app
-        context = self.glib.MainContext.default()
+        self.checkpoint("before semantic tree GLib context")
+        context = self.remote(self.glib.MainContext.default)
         for _ in range(32):
-            if not context.pending():
+            if not self.remote(context.pending):
                 break
-            context.iteration(False)
-        desktop = self.atspi.get_desktop(0)
+            self.remote(context.iteration, False)
+        self.checkpoint("before semantic tree desktop lookup")
+        desktop = self.remote(self.atspi.get_desktop, 0)
+        self.checkpoint("before semantic tree application discovery")
         roots = []
-        for index in range(desktop.get_child_count()):
-            app = desktop.get_child_at_index(index)
-            app.clear_cache()
-            if app.get_process_id() == identity["pid"]:
+        desktop_count = self.remote(desktop.get_child_count)
+        require(0 <= desktop_count <= MAX_NODES, "Invalid accessibility desktop child count")
+        for index in range(desktop_count):
+            app = self.remote(desktop.get_child_at_index, index)
+            self.remote(app.clear_cache)
+            if self.remote(app.get_process_id) == identity["pid"]:
                 roots.append(app)
         root = unique(roots, "AT-SPI application with exact owned PID")
-        root.set_cache_mask(self.atspi.Cache.NONE)
+        self.remote(root.set_cache_mask, self.atspi.Cache.NONE)
+        self.checkpoint("before semantic tree node traversal")
         pending, nodes = [(root, ())], []
         while pending:
             accessible, path = pending.pop()
             self.bound()
             require(len(nodes) < MAX_NODES and len(path) <= MAX_DEPTH, "Accessibility tree exceeds bound")
-            accessible.clear_cache_single()
-            require(accessible.get_process_id() == identity["pid"], "Accessibility node belongs to another process")
-            states = accessible.get_state_set()
+            self.remote(accessible.clear_cache_single)
+            require(self.remote(accessible.get_process_id) == identity["pid"], "Accessibility node belongs to another process")
+            states = self.remote(accessible.get_state_set)
             flags = [name for name in ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "SELECTED", "FOCUSED", "EDITABLE", "DEFUNCT")
-                     if states.contains(getattr(self.atspi.StateType, name))]
-            action = accessible.get_action_iface()
-            names = [action.get_action_name(i) for i in range(action.get_n_actions())] if action else []
-            name = accessible.get_name() or ""
-            require(len(name) <= 2048 and len(names) <= 32, "Accessibility metadata exceeds bound")
-            node = {"path": path, "name": name, "role": accessible.get_role_name(), "states": flags,
+                     if self.remote(states.contains, getattr(self.atspi.StateType, name))]
+            action = self.remote(accessible.get_action_iface)
+            action_count = self.remote(action.get_n_actions) if action else 0
+            require(0 <= action_count <= 32, "Accessibility action count exceeds bound")
+            names = [self.remote(action.get_action_name, i) for i in range(action_count)]
+            name = self.remote(accessible.get_name) or ""
+            require(len(name) <= 2048, "Accessibility metadata exceeds bound")
+            node = {"path": path, "name": name, "role": self.remote(accessible.get_role_name), "states": flags,
                     "actions": names, "accessible": accessible}
             nodes.append(node)
-            child_count = accessible.get_child_count()
+            child_count = self.remote(accessible.get_child_count)
             require(0 <= child_count <= MAX_NODES, "Invalid accessibility child count")
-            pending.extend((accessible.get_child_at_index(i), path + (i,)) for i in reversed(range(child_count)))
+            for index in reversed(range(child_count)):
+                pending.append((self.remote(accessible.get_child_at_index, index), path + (index,)))
         self.bound()
         self.last_tree = [self.describe(n) for n in nodes]
+        self.checkpoint("semantic tree traversal completed")
         return nodes
 
     @staticmethod
@@ -345,7 +408,7 @@ class Observer:
         require(file_hash(self.args.media) == self.args.media_sha256, "Owned media changed before ordinary import")
         self.nav(1)
         self.act("Import local audio")
-        chooser = self.wait(lambda: unique(self.x11.windows(self.portal["pid"], "flutter picker"), "owned real GTK chooser window"),
+        chooser = self.wait(lambda: unique(self.windows(self.portal, "flutter picker"), "owned real GTK chooser window"),
                             "owned real GTK chooser", 25)
         def dialog_present():
             nodes = self.tree(self.portal)
@@ -369,7 +432,7 @@ class Observer:
         self.record("actions", "real chooser path entry", target=self.describe(fresh), media_sha256=self.args.media_sha256)
         self.capture("chooser-owned-path", chooser)
         self.keyboard("Return", (), chooser, self.portal, may_close=True)
-        self.wait(lambda: not self.x11.windows(self.portal["pid"], "flutter picker"), "real chooser closed after ordinary selection")
+        self.wait(lambda: not self.windows(self.portal, "flutter picker"), "real chooser closed after ordinary selection")
         self.wait(lambda: self.find("owned imported track", predicate=lambda n, ns:
                                    self.args.media.stem in n["name"] and not n["name"].startswith("Open now playing for ")),
                   "ordinary imported track", 25)
@@ -428,10 +491,12 @@ class Observer:
             self.capture("after-seek-paused")
 
     def run(self):
-        self.window = self.wait(lambda: unique(self.x11.windows(self.app["pid"], "aethertune"), "ordinary app window"),
+        self.checkpoint("before ordinary app window discovery")
+        self.window = self.wait(lambda: unique(self.windows(self.app, "aethertune"), "ordinary app window"),
                                 "ordinary app window", 25)
         self.report["window_xid"] = self.window
         require(self.x11.attributes(self.window).width >= 900, "Ordinary app window is too narrow for desktop shortcuts")
+        self.checkpoint("before first semantic tree/native calls")
         initial = self.args.phase == "initial"
         if initial:
             self.wait(lambda: self.find("Skip setup"), "ordinary first-launch onboarding", 25)
@@ -494,7 +559,7 @@ def main():
               "scope": "ordinary release; native Linux keyboard/GTK picker; synthetic PCM; same-profile reopen",
               "excluded": ["physical audio", "screen-reader usability", "production trust", "versioned upgrade"],
               "screenshot_review": "required"}
-    observer = None
+    observer, diagnostics_started = None, False
     try:
         require(sys.platform == "linux" and os.environ.get("GITHUB_ACTIONS") == "true", "Hosted Linux execution required")
         fixture = Path(os.environ["HOME"])
@@ -513,6 +578,11 @@ def main():
         validate_inputs(args)
         report.update(app_identity=json.loads(args.identity), portal_identity=json.loads(args.portal_identity))
         report["media"] = {"path": str(args.media), "sha256": args.media_sha256, "size": args.media.stat().st_size}
+        checkpoint(args, report, "before native diagnostics")
+        # Only stack frames go to the current owned stderr. No locals are dumped;
+        # repeat lifetime is bounded by this phase and the coordinator's child wait.
+        faulthandler.dump_traceback_later(TRACEBACK_SECONDS, repeat=True, file=sys.stderr, exit=False)
+        diagnostics_started = True
         observer = Observer(args, report)
         observer.run()
         report["result"] = "PASS"
@@ -525,10 +595,15 @@ def main():
             except Exception as capture_error:
                 report["failure_capture_error"] = str(capture_error)
     finally:
-        if observer is not None:
-            observer.close()
-        report["finished_utc"] = timestamp()
-        write_json(args.evidence / f"behavior-{args.phase}.json", report)
+        try:
+            if observer is not None:
+                observer.checkpoint("before native observer close")
+                observer.close()
+        finally:
+            if diagnostics_started:
+                faulthandler.cancel_dump_traceback_later()
+            report["finished_utc"] = timestamp()
+            write_json(args.evidence / f"behavior-{args.phase}.json", report)
     print(json.dumps({"result": report["result"], "phase": args.phase, "error": report.get("error")}))
     return 0 if report["result"] == "PASS" else 1
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Portable rejection guards; these fixtures never establish native UI acceptance."""
 import ctypes as C
+from contextlib import redirect_stderr
 import hashlib
+from io import StringIO
 import json
 from pathlib import Path
 import tempfile
@@ -17,6 +19,77 @@ def node(path, name="", role="panel", states=("VISIBLE", "SHOWING", "ENABLED"), 
 
 
 class ObserverGuards(unittest.TestCase):
+    def test_checkpoint_is_persisted_before_blocking_gi_initialization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app = {"pid": 12, "start_ticks": 100, "exe": "/opt/aethertune/aethertune"}
+            portal = {"pid": 13, "start_ticks": 101, "exe": "/usr/libexec/xdg-desktop-portal-gtk"}
+            args = SimpleNamespace(phase="initial", evidence=Path(directory),
+                                   identity=json.dumps(app), portal_identity=json.dumps(portal))
+            report, log = {}, StringIO()
+            observer = object.__new__(ui.Observer)
+            def blocked_import():
+                saved = json.loads((args.evidence / "behavior-initial-progress.json").read_text(encoding="utf-8"))
+                self.assertEqual(saved["last_checkpoint"]["label"], "before GI import")
+                self.assertEqual(saved["result"], "IN_PROGRESS")
+                self.assertEqual(observer.deadline, 100 + ui.OBSERVER_SECONDS)
+                self.assertIn('"before GI import"', log.getvalue())
+                raise RuntimeError("synthetic blocking import boundary")
+            with redirect_stderr(log), patch.object(ui.time, "monotonic", return_value=100), \
+                    patch.object(ui, "process_identity", side_effect=lambda pid: app if pid == 12 else portal), \
+                    patch.object(ui, "load_atspi", side_effect=blocked_import), \
+                    patch.object(ui.os, "fsync", wraps=ui.os.fsync) as synced:
+                with self.assertRaisesRegex(RuntimeError, "blocking import"):
+                    observer.__init__(args, report)
+                synced.assert_called_once()
+            self.assertEqual(report["last_checkpoint"]["label"], "before GI import")
+            self.assertIsNone(observer.x11)
+
+    def test_tree_stops_between_remote_calls_when_phase_budget_is_consumed(self):
+        # A slow get_name must prevent the subsequent role/child remote calls,
+        # even on the first node. Checking only once per node permits them.
+        with tempfile.TemporaryDirectory() as directory:
+            app, portal = {"pid": 12}, {"pid": 13}
+            clock, calls = [0], []
+            def slow_name():
+                calls.append("name")
+                clock[0] = 4
+                return "owned application"
+            root = SimpleNamespace(clear_cache=lambda: None, clear_cache_single=lambda: None,
+                get_process_id=lambda: 12, set_cache_mask=lambda mask: None,
+                get_state_set=lambda: SimpleNamespace(contains=lambda state: False),
+                get_action_iface=lambda: None, get_name=slow_name,
+                get_role_name=lambda: calls.append("role") or "frame", get_child_count=lambda: 0)
+            desktop = SimpleNamespace(get_child_count=lambda: 1, get_child_at_index=lambda index: root)
+            observer = object.__new__(ui.Observer)
+            observer.args = SimpleNamespace(phase="initial", evidence=Path(directory))
+            observer.report, observer.app, observer.portal = {}, app, portal
+            observer.deadline, observer.last_tree = 3, []
+            observer.glib = SimpleNamespace(MainContext=SimpleNamespace(default=lambda: SimpleNamespace(pending=lambda: False)))
+            observer.atspi = SimpleNamespace(get_desktop=lambda index: desktop, Cache=SimpleNamespace(NONE=0),
+                StateType=SimpleNamespace(**{key: key for key in ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE",
+                                                                "SELECTED", "FOCUSED", "EDITABLE", "DEFUNCT")}))
+            with redirect_stderr(StringIO()), patch.object(ui.time, "monotonic", side_effect=lambda: clock[0]), \
+                    patch.object(ui, "process_identity", side_effect=lambda pid: app if pid == 12 else portal):
+                with self.assertRaisesRegex(RuntimeError, "overall bound"):
+                    observer.tree()
+            self.assertEqual(calls, ["name"])
+            self.assertEqual(observer.last_tree, [])
+            saved = json.loads((observer.args.evidence / "behavior-initial-progress.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["last_checkpoint"]["label"], "before semantic tree node traversal")
+
+    def test_checkpoint_history_is_bounded_and_latest_progress_is_flushed(self):
+        with tempfile.TemporaryDirectory() as directory, redirect_stderr(StringIO()):
+            args, report = SimpleNamespace(phase="initial", evidence=Path(directory)), {}
+            for index in range(ui.MAX_CHECKPOINTS + 4):
+                ui.checkpoint(args, report, "before semantic tree node traversal")
+            self.assertEqual(len(report["checkpoints"]), ui.MAX_CHECKPOINTS)
+            self.assertEqual(report["checkpoint_count"], ui.MAX_CHECKPOINTS + 4)
+            saved = json.loads((args.evidence / "behavior-initial-progress.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["checkpoint_count"], ui.MAX_CHECKPOINTS + 4)
+            self.assertEqual(saved["last_checkpoint"], report["last_checkpoint"])
+            self.assertEqual(set(saved["last_checkpoint"]), {"utc", "monotonic", "label"})
+            self.assertNotIn("identity", saved)
+
     def test_navigation_uses_actual_selected_semantics_and_rejects_aliases(self):
         home = node((0, 1), "Home\nTab 1 of 6", states=("VISIBLE", "SHOWING", "ENABLED", "SELECTED"), actions=("Tap",))
         library = node((0, 2), "Library\nTab 2 of 6", actions=("Tap",))
