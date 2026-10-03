@@ -176,6 +176,63 @@ ACTUAL_IMPORTED_LIBRARY_JSON = r'''[
 ]'''
 
 
+# Exact 49-node ordinary paused-player failure, run37144337735/artifact11280983432.
+# Raw tree SHA256 57411ba35e823fc6005f55a333a7d386458c5a33668cce3bed6798fc99f31267.
+# Both sliders share the time-label panel; no seek action was accepted in this run.
+ACTUAL_PAUSED_PLAYER_SHA256 = '7651af97596a3a7856a70147ca7048e84a0553c43f49ac512dfda002fd0a944d'
+ACTUAL_PAUSED_PLAYER_JSON = r'''[
+{"actions": [], "name": "dev.aethertune.aethertune", "path": [], "role": "application", "states": []},
+{"actions": [], "name": "aethertune", "path": [0], "role": "frame", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "FOCUSED"]},
+{"actions": [], "name": "", "path": [0, 0, 0], "role": "filler", "states": []},
+{"actions": [], "name": "", "path": [0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "Now playing", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "header", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 2], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 3], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 4], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 5], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 6], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 7], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 8], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 9], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 0, 10], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["ScrollLeft", "ScrollRight"], "name": "Artwork for aethertune-linux-behavior-180s", "path": [0, 0, 0, 0, 0, 0, 0, 0, 1], "role": "image", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Local Folder", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 0], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "aethertune-linux-behavior-180s", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Add to favorites", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 2], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "documents", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 3], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Track 1 of 1", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 4], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 5], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Increase", "Decrease", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 0], "role": "slider", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Elapsed time 0:04", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 6], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Remaining time 2:55", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 7], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "Playback volume", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 8], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 9], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Increase", "Decrease", "Focus"], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 0], "role": "slider", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": [], "name": "", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 1], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": [], "name": "100%", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 10], "role": "panel", "states": ["VISIBLE", "SHOWING"]},
+{"actions": ["Tap", "Focus"], "name": "Enable shuffle", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 11], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Previous", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 12], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Skip back 10 seconds", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 13], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Play", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 14], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Skip forward 30 seconds", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 15], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Next", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 16], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Enable repeat all", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 17], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Lyrics", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 18], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Queue", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 19], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Set A", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 20], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]},
+{"actions": ["Tap", "Focus"], "name": "Bookmark", "path": [0, 0, 0, 0, 0, 0, 0, 0, 2, 21], "role": "push button", "states": ["VISIBLE", "SHOWING", "ENABLED", "SENSITIVE"]}
+]'''
+
+
 class ObserverGuards(unittest.TestCase):
     def chooser_model(self, media):
         # Model the GI overload on one Accessible object implementing Text.
@@ -1009,15 +1066,113 @@ class ObserverGuards(unittest.TestCase):
         self.assertIs(ui.selected_destination([home, heading], "Home"), home)
 
     def test_seek_is_scoped_to_elapsed_remaining_and_excludes_volume(self):
+        # Preserve the nested layout case as well as the captured flattened one.
+        panel = node((0,))
         seek = node((0, 2, 0), role="slider", actions=("Increase", "Decrease"))
         elapsed = node((0, 2, 1, 0), "Elapsed time 0:09")
         remaining = node((0, 2, 1, 1), "Remaining time 2:51")
-        volume = node((0, 3, 0), role="slider", actions=("Increase", "Decrease"))
-        self.assertIs(ui.seek_slider([seek, elapsed, remaining, volume]), seek)
+        volume_label = node((0, 3, 0), "Playback volume")
+        volume = node((0, 3, 1), role="slider", actions=("Increase", "Decrease"))
+        values = [panel, seek, elapsed, remaining, volume_label, volume]
+        self.assertIs(ui.seek_slider(values), seek)
         with self.assertRaisesRegex(RuntimeError, "unambiguous"):
-            ui.seek_slider([seek, elapsed, volume])
+            ui.seek_slider([n for n in values if n is not remaining])
         with self.assertRaisesRegex(RuntimeError, "unambiguous"):
-            ui.seek_slider([seek, elapsed, remaining, dict(seek, path=(0, 2, 2))])
+            ui.seek_slider(values + [dict(seek, path=(0, 2, 0, 1))])
+
+    def test_actual_49_node_paused_player_selects_position_branch_and_never_volume(self):
+        values = json.loads(ACTUAL_PAUSED_PLAYER_JSON)
+        canonical = json.dumps(values, sort_keys=True, separators=(",", ":")).encode()
+        self.assertEqual(len(values), 49)
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), ACTUAL_PAUSED_PLAYER_SHA256)
+        sliders = [n for n in values if n["role"] == "slider"]
+        self.assertEqual(len(sliders), 2)
+        chosen = ui.seek_slider(values)
+        self.assertEqual(chosen["path"], [0,0,0,0,0,0,0,0,2,5,0])
+        volume = ui.unique([n for n in sliders if n is not chosen], "captured volume slider")
+        self.assertEqual(volume["path"], [0,0,0,0,0,0,0,0,2,9,0])
+        self.assertEqual(chosen["actions"], ["Increase", "Decrease", "Focus"])
+        # Relocating the full subtree retains its observed relative contract;
+        # the selector must not depend on the recorded absolute child indices.
+        content = chosen["path"][:-2]
+        relocated = [dict(n, path=[7,3]+n["path"][len(content):])
+                     for n in values if n["path"][:len(content)] == content]
+        self.assertEqual(ui.seek_slider(relocated)["path"], [7,3,5,0])
+
+    def test_seek_rejects_missing_position_ambiguous_landmarks_sliders_or_changed_capabilities(self):
+        def seek(values):
+            return ui.unique([n for n in values if n["role"] == "slider" and n["path"][-2:] == [5,0]], "captured position")
+        def label(values, prefix):
+            return ui.unique([n for n in values if n["name"].startswith(prefix)], "captured landmark")
+        def duplicate(values, prefix):
+            current = label(values, prefix)
+            values.append(dict(current, path=current["path"][:-1]+[30]))
+        def extra(values):
+            current = seek(values)
+            values.append(dict(current, path=current["path"][:-1]+[2]))
+        def move_volume_before_time(values):
+            volume = ui.unique([n for n in values if n["role"] == "slider" and n["path"][-2:] == [9,0]], "volume")
+            volume["path"] = seek(values)["path"][:-1]+[2]
+        changes = {
+            "volume only": lambda v: v.remove(seek(v)),
+            "extra slider before time": extra,
+            "volume moved before time": move_volume_before_time,
+            "duplicate elapsed": lambda v: duplicate(v, "Elapsed time "),
+            "duplicate remaining": lambda v: duplicate(v, "Remaining time "),
+            "duplicate volume label": lambda v: duplicate(v, "Playback volume"),
+            "missing volume landmark": lambda v: v.remove(label(v, "Playback volume")),
+            "hidden elapsed": lambda v: label(v, "Elapsed time ")["states"].remove("VISIBLE"),
+            "wrong remaining formatter": lambda v: label(v, "Remaining time ").update(name="Remaining time 2:99"),
+            "hidden seek": lambda v: seek(v)["states"].remove("VISIBLE"),
+            "disabled seek": lambda v: seek(v)["states"].remove("ENABLED"),
+            "defunct seek": lambda v: seek(v)["states"].append("DEFUNCT"),
+            "no Increase": lambda v: seek(v)["actions"].remove("Increase"),
+            "no Decrease": lambda v: seek(v)["actions"].remove("Decrease"),
+            "wrong role": lambda v: seek(v).update(role="panel"),
+        }
+        for name,change in changes.items():
+            with self.subTest(name=name):
+                values = json.loads(ACTUAL_PAUSED_PLAYER_JSON);change(values)
+                with self.assertRaises(RuntimeError):
+                    ui.seek_slider(values)
+
+    def test_seek_action_reselects_current_branches_and_rejects_immediate_native_state_change(self):
+        for change in ("position vanished", "new ambiguous slider", "native disabled", "native PID changed"):
+            with self.subTest(change=change):
+                observer = object.__new__(ui.Observer)
+                observer.app, observer.bound = {"pid":12}, lambda: None
+                observer.report = {"actions": []}
+                observer.atspi = SimpleNamespace(StateType=SimpleNamespace(**{name:name for name in
+                    ("VISIBLE", "SHOWING", "ENABLED", "SENSITIVE", "DEFUNCT")}))
+                state = {"changed":False, "actions":[]}
+                def tree(identity=None):
+                    self.assertIsNone(identity)
+                    values = json.loads(ACTUAL_PAUSED_PLAYER_JSON)
+                    position = ui.unique([n for n in values if n["role"] == "slider" and n["path"][-2:] == [5,0]], "position")
+                    if state["changed"] and change == "position vanished": values.remove(position)
+                    if state["changed"] and change == "new ambiguous slider":
+                        values.append(dict(position, path=position["path"][:-1]+[2]))
+                    for value in values:
+                        flags = set(value["states"])
+                        if state["changed"] and change == "native disabled" and value is position:
+                            flags.remove("ENABLED")
+                        actions = value["actions"]
+                        value["accessible"] = SimpleNamespace(clear_cache_single=lambda: None,
+                            get_process_id=lambda:999 if state["changed"] and change=="native PID changed" else 12,
+                            get_name=lambda value=value:value["name"],
+                            get_state_set=lambda flags=flags:SimpleNamespace(contains=lambda name:name in flags),
+                            get_action_iface=lambda actions=actions:SimpleNamespace(get_n_actions=lambda:len(actions),
+                                get_action_name=lambda index:actions[index],
+                                do_action=lambda index:state["actions"].append(index) or True))
+                    return values
+                observer.tree = tree
+                predicate = lambda n,ns:n["path"] == ui.seek_slider(ns)["path"]
+                previous = observer.find("observed seek slider", "Increase", predicate=predicate)
+                self.assertEqual(previous["path"][-2:], [5,0])
+                state["changed"] = True
+                with self.assertRaises(RuntimeError):
+                    observer.act("observed seek slider", "Increase", predicate=predicate)
+                self.assertEqual(state["actions"], [])
 
     def test_hidden_and_defunct_nodes_cannot_trigger_ui_mutation(self):
         hidden = node((0,), "Play", states=("ENABLED",), actions=("Tap", "ShowOnScreen"))

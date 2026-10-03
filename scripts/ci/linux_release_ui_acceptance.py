@@ -191,20 +191,36 @@ def onboarding_target(nodes):
 
 
 def seek_slider(nodes):
-    elapsed = unique([n for n in nodes if available(n) and n["name"].startswith("Elapsed time ")],
-                     "visible elapsed-time label")
+    elapsed = unique([n for n in nodes if n["name"].startswith("Elapsed time ")], "unambiguous elapsed-time label")
+    remaining = unique([n for n in nodes if n["name"].startswith("Remaining time ")], "unambiguous remaining-time label")
+    volume_label = unique([n for n in nodes if n["name"] == "Playback volume"], "unambiguous playback-volume label")
+    require(all(available(n) for n in (elapsed, remaining, volume_label)), "Seek landmarks are hidden or defunct")
     elapsed_seconds(elapsed["name"])
-    # Choose the nearest observed ancestor that contains the real elapsed and
-    # remaining labels and exactly one actionable slider. This excludes volume.
-    for length in range(len(elapsed["path"]) - 1, 0, -1):
-        prefix = elapsed["path"][:length]
-        scope = [n for n in nodes if n["path"][:length] == prefix]
-        if not any(available(n) and n["name"].startswith("Remaining time ") for n in scope):
-            continue
-        sliders = [n for n in scope if n["role"] == "slider" and actionable(n, "Increase")]
-        if len(sliders) == 1:
-            return sliders[0]
-    raise RuntimeError("No unambiguous seek slider bound to elapsed/remaining labels")
+    elapsed_seconds("Elapsed time " + remaining["name"][len("Remaining time "):])
+    paths = [tuple(n["path"]) for n in (elapsed, remaining, volume_label)]
+    prefix = paths[0]
+    for path in paths[1:]:
+        prefix = prefix[:next((i for i, pair in enumerate(zip(prefix, path)) if pair[0] != pair[1]),
+                              min(len(prefix), len(path)))]
+    container = unique([n for n in nodes if tuple(n["path"]) == prefix], "unambiguous playback landmark panel")
+    require(prefix and container["role"] == "panel" and available(container) and paths[0] < paths[1] < paths[2],
+            "Playback landmarks do not have their observed source order/scope")
+    # _PlaybackProgress builds its Slider before elapsed/remaining; the later
+    # _PlaybackVolumeControl builds its named icon before its separate Slider.
+    # Flutter can flatten those Columns/Rows into one semantic panel, so use
+    # observed relative branch order rather than assuming distinct containers.
+    sliders = [n for n in nodes if n["role"] == "slider" and descendant(n, container)]
+    seek = unique([n for n in sliders if tuple(n["path"]) < paths[0] and
+                   not any(descendant(label, n) for label in (elapsed, remaining, volume_label))],
+                  "unambiguous seek slider before elapsed/remaining labels")
+    volume = unique([n for n in sliders if tuple(n["path"]) > paths[2]],
+                    "unambiguous separate slider after playback-volume label")
+    require(len(sliders) == 2 and seek["path"] != volume["path"] and
+            seek["path"][:len(prefix)+1] != volume["path"][:len(prefix)+1] and available(volume),
+            "Seek and volume sliders are not distinct unambiguous branches")
+    require(actionable(seek, "Increase") and actionable(seek, "Decrease"),
+            "Seek slider is hidden, disabled, defunct or lacks Increase/Decrease")
+    return seek
 
 
 def private_bus_address(address, fixture):
