@@ -1,4 +1,4 @@
-FROM dart:3.13.3@sha256:7e57e61d97813dc57dd0801656ff4d5c5efafa47bae563a681571543ad30f199 AS build
+FROM dart:3.13.5@sha256:7efb22ee3003e3aaa7af34840bfacb2fc1b06e1ac1295237dfcca1552816588e AS build
 
 WORKDIR /app
 
