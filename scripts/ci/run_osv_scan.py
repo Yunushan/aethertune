@@ -50,7 +50,7 @@ def run_osv_scan(
     completed = subprocess.run(command, check=False)
     # Reject Docker/runtime/API/configuration/no-package errors regardless of
     # whether a crash left a partial but well-formed findings file behind.
-    verify_osv_scan(results, completed.returncode)
+    verify_osv_scan(results, completed.returncode, require_packages="--all-packages" in arguments)
 
 
 def main() -> int:

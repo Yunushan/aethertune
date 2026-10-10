@@ -39,8 +39,10 @@ class SystemMediaPlaybackEngine extends BaseAudioHandler
       _publishState();
     });
     _indexSubscription = _engine.currentIndexStream.listen((index) {
+      if (index != _currentIndex) {
+        _runtimeDuration = null;
+      }
       _currentIndex = index;
-      _runtimeDuration = null;
       _publishQueueAndCurrentItem();
       _publishState();
     });

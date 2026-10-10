@@ -38,6 +38,170 @@ void main() {
     expect(engine.mediaItem.value?.duration, const Duration(minutes: 4));
   });
 
+  test('retains decoded duration after a same-index seek', () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final widget = _FakePlaybackWidgetBridge();
+    final desktop = _FakeDesktopMediaSession();
+    final engine = SystemMediaPlaybackEngine(
+      delegate,
+      playbackWidgetBridge: widget,
+      desktopMediaSession: desktop,
+    );
+    addTearDown(engine.dispose);
+    await Future<void>.delayed(Duration.zero);
+    await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+    expect(engine.mediaItem.value?.duration, isNull);
+
+    const duration = Duration(minutes: 2);
+    delegate.emitDuration(duration);
+    expect(engine.mediaItem.value?.duration, duration);
+
+    // This delegate republishes index 0, without another duration event.
+    await engine.seek(const Duration(seconds: 12), index: 0);
+
+    expect(engine.mediaItem.value?.id, 'one');
+    expect(engine.mediaItem.value?.duration, duration);
+    expect(engine.queue.value.single.duration, duration);
+    expect(widget.updates.last.title, 'Track one');
+    expect(widget.updates.last.position, const Duration(seconds: 12));
+    expect(widget.updates.last.duration, duration);
+    expect(desktop.states.last.track?.id, 'one');
+    expect(desktop.states.last.position, const Duration(seconds: 12));
+    expect(desktop.states.last.duration, duration);
+  });
+
+  test('clears decoded duration for a different or null index', () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final widget = _FakePlaybackWidgetBridge();
+    final desktop = _FakeDesktopMediaSession();
+    final engine = SystemMediaPlaybackEngine(
+      delegate,
+      playbackWidgetBridge: widget,
+      desktopMediaSession: desktop,
+    );
+    addTearDown(engine.dispose);
+    await Future<void>.delayed(Duration.zero);
+    await engine.setQueue(<Track>[
+      _track('one'),
+      _track('two'),
+    ], initialIndex: 0);
+    delegate.emitDuration(const Duration(minutes: 2));
+
+    await engine.seek(Duration.zero, index: 1);
+
+    expect(engine.mediaItem.value?.id, 'two');
+    expect(engine.mediaItem.value?.duration, isNull);
+    expect(engine.queue.value.map((item) => item.duration), <Duration?>[
+      null,
+      null,
+    ]);
+    expect(widget.updates.last.duration, isNull);
+    expect(desktop.states.last.duration, isNull);
+
+    delegate.emitDuration(const Duration(minutes: 1));
+    expect(engine.mediaItem.value?.duration, const Duration(minutes: 1));
+    delegate.emitIndex(null);
+
+    expect(engine.mediaItem.value, isNull);
+    expect(widget.updates.last.duration, isNull);
+    expect(desktop.states.last.track, isNull);
+    expect(desktop.states.last.duration, isNull);
+
+    delegate.emitIndex(1);
+    expect(engine.mediaItem.value?.id, 'two');
+    expect(engine.mediaItem.value?.duration, isNull);
+    expect(engine.queue.value.last.duration, isNull);
+  });
+
+  test(
+    'clears decoded duration when the same-index source is replaced',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final widget = _FakePlaybackWidgetBridge();
+      final desktop = _FakeDesktopMediaSession();
+      final engine = SystemMediaPlaybackEngine(
+        delegate,
+        playbackWidgetBridge: widget,
+        desktopMediaSession: desktop,
+      );
+      addTearDown(engine.dispose);
+      await Future<void>.delayed(Duration.zero);
+      await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+      delegate.emitDuration(const Duration(minutes: 2));
+
+      await engine.setQueue(<Track>[
+        _track('one', localPath: '/music/replacement.mp3'),
+      ], initialIndex: 0);
+
+      expect(delegate.tracks.single.localPath, '/music/replacement.mp3');
+      expect(engine.mediaItem.value?.id, 'one');
+      expect(engine.mediaItem.value?.duration, isNull);
+      expect(engine.queue.value.single.duration, isNull);
+      expect(widget.updates.last.duration, isNull);
+      expect(desktop.states.last.duration, isNull);
+    },
+  );
+
+  test(
+    'does not restore stale duration after a failed queue replacement',
+    () async {
+      final delegate = _FakePlaybackAudioEngine();
+      final widget = _FakePlaybackWidgetBridge();
+      final desktop = _FakeDesktopMediaSession();
+      final engine = SystemMediaPlaybackEngine(
+        delegate,
+        playbackWidgetBridge: widget,
+        desktopMediaSession: desktop,
+      );
+      addTearDown(engine.dispose);
+      await Future<void>.delayed(Duration.zero);
+      await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+      delegate.emitDuration(const Duration(minutes: 2));
+      final failure = StateError('Synthetic queue replacement failure');
+      delegate
+        ..queueError = failure
+        ..queueErrorDuration = const Duration(seconds: 45);
+
+      await expectLater(
+        engine.setQueue(<Track>[_track('replacement')], initialIndex: 0),
+        throwsA(same(failure)),
+      );
+
+      expect(engine.mediaItem.value?.id, 'one');
+      expect(engine.mediaItem.value?.duration, isNull);
+      expect(engine.queue.value.single.id, 'one');
+      expect(engine.queue.value.single.duration, isNull);
+      delegate.emitPlaying(false);
+      expect(widget.updates.last.title, 'Track one');
+      expect(widget.updates.last.duration, isNull);
+      expect(desktop.states.last.track?.id, 'one');
+      expect(desktop.states.last.duration, isNull);
+    },
+  );
+
+  test('clears decoded duration when the backend reports it unknown', () async {
+    final delegate = _FakePlaybackAudioEngine();
+    final widget = _FakePlaybackWidgetBridge();
+    final desktop = _FakeDesktopMediaSession();
+    final engine = SystemMediaPlaybackEngine(
+      delegate,
+      playbackWidgetBridge: widget,
+      desktopMediaSession: desktop,
+    );
+    addTearDown(engine.dispose);
+    await Future<void>.delayed(Duration.zero);
+    await engine.setQueue(<Track>[_track('one')], initialIndex: 0);
+    delegate.emitDuration(const Duration(minutes: 2));
+
+    delegate.emitDuration(null);
+    await engine.seek(const Duration(seconds: 12), index: 0);
+
+    expect(engine.mediaItem.value?.duration, isNull);
+    expect(engine.queue.value.single.duration, isNull);
+    expect(widget.updates.last.duration, isNull);
+    expect(desktop.states.last.duration, isNull);
+  });
+
   test(
     'publishes sleep timer state only with the current media item',
     () async {
@@ -677,7 +841,12 @@ void main() {
   });
 }
 
-Track _track(String id, {Duration duration = Duration.zero, Uri? artwork}) {
+Track _track(
+  String id, {
+  Duration duration = Duration.zero,
+  Uri? artwork,
+  String? localPath,
+}) {
   return Track(
     id: id,
     title: 'Track $id',
@@ -685,7 +854,7 @@ Track _track(String id, {Duration duration = Duration.zero, Uri? artwork}) {
     album: 'Album $id',
     duration: duration,
     artworkUri: artwork,
-    localPath: '/music/$id.mp3',
+    localPath: localPath ?? '/music/$id.mp3',
   );
 }
 
@@ -707,6 +876,8 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
   Duration bufferedPositionValue = Duration.zero;
   double volumeValue = 1;
   double speedValue = 1;
+  Object? queueError;
+  Duration? queueErrorDuration;
 
   @override
   Stream<Object?> get stateChanges => _stateController.stream;
@@ -761,6 +932,11 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     currentIndex = initialIndex;
     positionValue = initialPosition;
     _indexController.add(currentIndex);
+    final error = queueError;
+    if (error != null) {
+      emitDuration(queueErrorDuration);
+      throw error;
+    }
   }
 
   void emitPlaying(bool playing) {
@@ -768,8 +944,13 @@ class _FakePlaybackAudioEngine implements PlaybackAudioEngine {
     _stateController.add(null);
   }
 
-  void emitDuration(Duration duration) {
+  void emitDuration(Duration? duration) {
     _durationController.add(duration);
+  }
+
+  void emitIndex(int? index) {
+    if (index != null) currentIndex = index;
+    _indexController.add(index);
   }
 
   void emitPosition(Duration position) {
