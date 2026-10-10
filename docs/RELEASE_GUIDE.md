@@ -295,6 +295,10 @@ exception; they are not silently accepted.
 
 The full scan retains its validated `results.json` as the **OSV Scanner JSON
 evidence** artifact for 30 days, including when the reporter rejects findings.
+Both full scan routes request `--all-packages` and reject a report without package
+identities. OSV's default findings-only JSON can contain license totals with an
+empty `results` array; those totals alone cannot identify dependencies that need
+license review.
 Review that report's per-package license metadata alongside the SARIF findings
 before approving a candidate. A SARIF report with no findings does not establish
 that every dependency has known license metadata or approve an `UNKNOWN` license

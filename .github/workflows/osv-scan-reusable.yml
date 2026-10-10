@@ -30,7 +30,7 @@ jobs:
         id: scan
         shell: bash
         env:
-          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }} --all-packages
         run: python3 scripts/ci/run_osv_scan.py
 
       - name: Run osv-scanner-reporter

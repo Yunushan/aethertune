@@ -34,6 +34,7 @@ jobs:
         shell: bash
         env:
           OSV_SCAN_ARGS: |-
+            --all-packages
             --lockfile=./apps/mobile/pubspec.lock
             --lockfile=./services/server/pubspec.lock
             --lockfile=./apps/mobile/packages/rhttp/rust/Cargo.lock
