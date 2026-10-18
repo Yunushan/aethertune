@@ -26,7 +26,8 @@ Local changes:
   writing it. A failed native build must not produce a successful Gradle result.
 - Pass Flutter's configured SDK path to Cargokit for direct Gradle/Android Studio
   builds, including builds launched without a `FLUTTER_ROOT` environment variable.
-- Resolve native advisories with h2 0.4.16, quinn-proto 0.11.15 and anyhow 1.0.103.
+- Resolve native advisories with h2 0.4.16, quinn-proto 0.11.18,
+  rustls 0.23.46 and anyhow 1.0.103.
 - Add optional `maxStreamResponseBytes` (uint32) for decoded stream responses.
   It rejects known oversize lengths and enforces cumulative chunk size before
   copying payloads into the Dart event queue, including decompressed bodies.
