@@ -47,7 +47,7 @@ def _reject_constant(value: str) -> None:
     raise ValueError(f"invalid JSON constant: {value}")
 
 
-def verify_osv_scan(path: Path, exit_code: int) -> None:
+def verify_osv_scan(path: Path, exit_code: int, *, require_packages: bool = False) -> None:
     if type(exit_code) is not int or exit_code not in {0, 1}:
         raise ValueError(f"scanner failed with exit code {exit_code}; only 0 and 1 are scan results")
     try:
@@ -61,6 +61,7 @@ def verify_osv_scan(path: Path, exit_code: int) -> None:
     data = _object(data, "scan")
     results = _list(data.get("results"), "scan.results")
     findings = False
+    package_count = 0
     for result in results:
         result = _object(result, "result")
         source = _object(result.get("source"), "result.source")
@@ -73,6 +74,7 @@ def verify_osv_scan(path: Path, exit_code: int) -> None:
             for field in ("name", "version", "ecosystem"):
                 if not isinstance(identity.get(field), str):
                     raise ValueError(f"package.package.{field} must be a string")
+            package_count += 1
             _typed_fields(identity, ("commit", "os_package_name"), str, "package.package")
             _typed_fields(identity, ("deprecated",), bool, "package.package")
             findings |= identity.get("deprecated", False)
@@ -113,6 +115,8 @@ def verify_osv_scan(path: Path, exit_code: int) -> None:
                     for entry in _list(vulnerability.get(field, []), f"vulnerability.{field}"):
                         _object(entry, f"vulnerability.{field} entry")
             findings |= bool(vulnerabilities)
+    if require_packages and package_count == 0:
+        raise ValueError("all-packages scan produced no package identities")
     # A nonzero exit with valid findings is expected. The reporter retains the
     # authority to apply fail-on-vuln, license and call-analysis policy.
     if exit_code == 1 and not findings:

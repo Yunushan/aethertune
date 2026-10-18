@@ -27,9 +27,10 @@ jobs:
           persist-credentials: false
 
       - name: Run scanner and verify evidence
+        id: scan
         shell: bash
         env:
-          OSV_SCAN_ARGS: ${{ inputs.scan-args }}
+          OSV_SCAN_ARGS: ${{ inputs.scan-args }} --all-packages
         run: python3 scripts/ci/run_osv_scan.py
 
       - name: Run osv-scanner-reporter
@@ -49,6 +50,15 @@ jobs:
           name: OSV Scanner SARIF file
           path: results.sarif
           retention-days: 5
+
+      - name: Retain validated package and license evidence
+        if: ${{ !cancelled() && steps.scan.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: OSV Scanner JSON evidence
+          path: results.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload to code-scanning
         if: ${{ !cancelled() }}

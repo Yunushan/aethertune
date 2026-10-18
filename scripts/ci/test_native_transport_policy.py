@@ -32,8 +32,15 @@ class NativeTransportPolicyTest(unittest.TestCase):
     def test_native_lock_has_the_audited_versions(self) -> None:
         lock = tomllib.loads((APP / "packages/rhttp/rust/Cargo.lock").read_text())
         versions = {(entry["name"], entry["version"]) for entry in lock["package"]}
-        for entry in [("h2", "0.4.16"), ("quinn-proto", "0.11.15"), ("anyhow", "1.0.103")]:
+        for entry in [
+            ("h2", "0.4.16"),
+            ("quinn-proto", "0.11.18"),
+            ("rustls", "0.23.46"),
+            ("anyhow", "1.0.103"),
+        ]:
             self.assertIn(entry, versions)
+        self.assertNotIn(("quinn-proto", "0.11.15"), versions)
+        self.assertNotIn(("rustls", "0.23.45"), versions)
 
     def test_platform_builds_and_scanners_include_native_lock(self) -> None:
         config = (APP / "packages/rhttp/rust/cargokit.yaml").read_text()

@@ -55,6 +55,20 @@ class VerifyOsvScanTest(unittest.TestCase):
         self.write(result(copy.deepcopy(PACKAGE)))
         verify_osv_scan(self.path, 0)
 
+    def test_all_packages_scan_requires_package_identities(self) -> None:
+        for data in ({"results": []}, {
+            "results": [{"source": {"path": "pubspec.lock", "type": "lockfile"}, "packages": []}],
+            "license_summary": [{"name": "UNKNOWN", "count": 219}],
+        }):
+            with self.subTest(data=data):
+                self.write(data)
+                with self.assertRaisesRegex(ValueError, "no package identities"):
+                    verify_osv_scan(self.path, 0, require_packages=True)
+        self.write(result(copy.deepcopy(PACKAGE)))
+        before = self.path.read_bytes()
+        verify_osv_scan(self.path, 0, require_packages=True)
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_failure_with_vulnerabilities_reaches_reporter_without_mutation(self) -> None:
         self.write(result(vulnerable_package()))
         before = self.path.read_bytes()
@@ -175,6 +189,13 @@ class OsvScannerProcessTest(unittest.TestCase):
             with self.subTest(exit_code=exit_code):
                 with self.assertRaisesRegex(ValueError, f"exit code {exit_code}"):
                     self.run_scanner(exit_code, payload)
+
+    def test_all_packages_runner_rejects_summary_only_output(self) -> None:
+        args = "--all-packages --lockfile=pubspec.lock"
+        with self.assertRaisesRegex(ValueError, "no package identities"):
+            self.run_scanner(0, '{"results": [], "license_summary": [{"name": "UNKNOWN", "count": 219}]}', args)
+        self.run_scanner(0, json.dumps(result(copy.deepcopy(PACKAGE))), args)
+        self.assertIn("--all-packages", json.loads((self.workspace / "invocation.json").read_text()))
 
     def test_old_results_are_removed_before_the_scanner_process(self) -> None:
         (self.workspace / "results.json").write_text(json.dumps(result(vulnerable_package())), encoding="utf-8")
