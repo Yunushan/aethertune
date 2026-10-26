@@ -13,7 +13,7 @@ RUN mkdir -p /out \
     && mkdir -m 0700 /out/data
 
 # Dart AOT uses glibc and bundled BoringSSL; retain CA certificates without system OpenSSL.
-FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:8c563c1fb5e120606f0d85733049775faed6192e2bd2223ef283a5393eec22b9
+FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:6a2a3346335b94d3be0732472245f42ca3ce3cc1135a9521a2bda4b677f2ef0d
 
 COPY --from=build /out/aethertune-server /usr/local/bin/aethertune-server
 COPY --from=build /out/aethertune-healthcheck /usr/local/bin/aethertune-healthcheck
